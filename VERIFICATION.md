@@ -1,0 +1,10 @@
+# Verification — 2026-10-09
+
+- **Current build:** Phase 2 `build.ps1 testDebugUnitTest assembleDebug lintDebug` completed with `BUILD SUCCESSFUL` using the project-local JDK 17 and Android SDK. The APK is [`app/build/outputs/apk/debug/app-debug.apk`](app/build/outputs/apk/debug/app-debug.apk), versionCode 2, versionName `2.0-demo`, 54,361,598 bytes, SHA-256 `d8b137c10d8baf7f147d430dfec4b17981c89f3656fd905880c924e629bccf04`.
+- **Unit tests:** 7 tests, 0 failures or errors: 6 `DecisionEngineTest` cases and 1 `PipelineMetricsTest` case. The new tests cover wide-box center overlap and two-frame confirmation as well as the earlier priority and cooldown rules.
+- **Android Lint:** 0 errors, 8 warnings. Report: [`app/build/reports/lint-results-debug.html`](app/build/reports/lint-results-debug.html).
+- **Package checks:** Direct `apksigner.jar verify` passed. `aapt dump permissions` shows camera, vibration, and an AndroidX internal receiver permission; no Internet or network-state permission. Minimum SDK is 26, target SDK is 34.
+- **Preserved Phase 1:** [`releases/phase1/mobility-assist-phase1-debug.apk`](releases/phase1/mobility-assist-phase1-debug.apk) remains 54,334,486 bytes with SHA-256 `13ae5989c1036cec0ca248af20443e9b35df854a41e97dd44c9fcec3d49d162e`. Its matching [source zip](releases/phase1/phase1-source.zip) has 29 project-relative entries. Use the [Phase 1 checklist](DEVICE_TEST_CHECKLIST.md) with this archived APK, not the current Phase 2 APK.
+- **Device validation pending:** The user will test Phase 1 on a physical phone later. Neither phase has been verified on a phone in this session. Live box alignment, detection quality, speech, vibration, TalkBack, offline operation, and sustained latency remain unmeasured. The center-overlap and two-frame thresholds are heuristics, not validated safety behavior.
+
+After the saved Phase 1 test, use the [Phase 2 checklist](PHASE2_TEST_CHECKLIST.md) to compare the new guidance on the same phone. Do not treat either APK as a validated mobility aid.
