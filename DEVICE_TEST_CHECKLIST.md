@@ -13,7 +13,7 @@ Run this with a sighted spotter in a controlled area while using the person's no
 | Camera resolution and orientation | Pending |
 | Test location and lighting | Pending |
 
-Install the preserved [`releases/phase1/mobility-assist-phase1-debug.apk`](releases/phase1/mobility-assist-phase1-debug.apk) with Android Studio or `adb install -r releases/phase1/mobility-assist-phase1-debug.apk`. The current `app/build` APK is Phase 2. Enable an offline English TTS voice first. Turn on TalkBack for the accessibility pass. Use airplane mode for the offline pass after installation.
+Install the preserved Phase 1 APK if you have the local project archive. In a fresh clone, extract [`releases/phase1/phase1-source.zip`](releases/phase1/phase1-source.zip) into a separate directory, build it there, and install its `app/build/outputs/apk/debug/app-debug.apk`. The main project's `app/build` APK is Phase 2. Enable an offline English TTS voice first. Turn on TalkBack for the accessibility pass. Use airplane mode for the offline pass after installation.
 
 ## Core checks
 

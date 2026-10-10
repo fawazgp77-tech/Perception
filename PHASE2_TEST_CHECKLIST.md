@@ -2,7 +2,7 @@
 
 Use a physical Android phone with a rear camera, an offline English TTS voice, a sighted spotter, and the person's normal mobility aid. Test in a controlled area. Record phone model, Android version, date, APK SHA-256, lighting, and actual results. The app does not establish a clear route.
 
-Install `app/build/outputs/apk/debug/app-debug.apk` after completing the preserved [Phase 1 test](DEVICE_TEST_CHECKLIST.md). The current build is Phase 2; the saved Phase 1 APK is in [`releases/phase1`](releases/phase1/README.md).
+Install `app/build/outputs/apk/debug/app-debug.apk` after completing the preserved [Phase 1 test](DEVICE_TEST_CHECKLIST.md). The current build is Phase 2; the [Phase 1 source archive](releases/phase1/README.md) is available for a separate rebuild.
 
 | # | Action | Expected result | Result / notes |
 |---|---|---|---|

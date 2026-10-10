@@ -1,6 +1,6 @@
 # Mobility Assist implementation plan
 
-This is the historical Phase 1 plan. The saved Phase 1 build and source are in [releases/phase1](releases/phase1/README.md). See [PHASE2_PLAN.md](PHASE2_PLAN.md) for the current implementation; Phase 2 changed the side-warning wording discussed below.
+This is the historical Phase 1 plan. The saved Phase 1 source is in [releases/phase1](releases/phase1/README.md). See [PHASE2_PLAN.md](PHASE2_PLAN.md) for the current implementation; Phase 2 changed the side-warning wording discussed below.
 
 **Scope:** Finish and validate Phase 1: a fully offline Android app that detects the seven requested object classes through the rear camera and gives speech and vibration warnings. This plan covers a supervised prototype, not independent navigation. Maps, GPS, route guidance, cloud inference, accounts, and a backend are outside this phase.
 

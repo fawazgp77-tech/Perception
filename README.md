@@ -1,6 +1,6 @@
 # Mobility Assist — Phase 2 demo
 
-See [PHASE2_PLAN.md](PHASE2_PLAN.md) for the current guidance changes and [PHASE2_TEST_CHECKLIST.md](PHASE2_TEST_CHECKLIST.md) for the first Phase 2 phone run. The original Phase 1 APK and source are preserved in [releases/phase1](releases/phase1/README.md), with its own [device checklist](DEVICE_TEST_CHECKLIST.md) for your later Phase 1 test.
+See [PHASE2_PLAN.md](PHASE2_PLAN.md) for the current guidance changes and [PHASE2_TEST_CHECKLIST.md](PHASE2_TEST_CHECKLIST.md) for the first Phase 2 phone run. The [Phase 1 source archive](releases/phase1/README.md) and [device checklist](DEVICE_TEST_CHECKLIST.md) are included for the later Phase 1 test. Debug APKs are generated locally and are not committed to Git.
 
 Kotlin Android demo: rear camera → on-device obstacle detection → bounding boxes → spoken and vibration warnings. No backend, maps, location permissions, GPS, image storage, or runtime network permission.
 

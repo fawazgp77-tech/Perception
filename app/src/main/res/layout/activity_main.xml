@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/screen_title" android:textSize="22sp"
+        android:textColor="#FFFFFF" android:padding="16dp" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <androidx.camera.view.PreviewView android:id="@+id/preview"
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:importantForAccessibility="no" />
+        <com.example.mobilityassist.OverlayView android:id="@+id/overlay"
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:importantForAccessibility="no" />
+    </FrameLayout>
+    <TextView android:id="@+id/status" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="@string/starting_detector"
+        android:textColor="#FFFFFF" android:textSize="18sp" android:padding="12dp" />
+    <TextView android:id="@+id/speechStatus" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="@string/starting_speech"
+        android:textColor="#FFE082" android:paddingHorizontal="12dp" android:accessibilityLiveRegion="polite" />
+    <TextView android:id="@+id/diagnostics" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:textColor="#B0BEC5"
+        android:paddingHorizontal="12dp" android:importantForAccessibility="no" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/size_note" android:textColor="#FFFFFF" android:padding="12dp" />
+    <Button android:id="@+id/toggle" android:layout_width="match_parent"
+        android:layout_height="64dp" android:text="@string/pause_assistance" />
+</LinearLayout>

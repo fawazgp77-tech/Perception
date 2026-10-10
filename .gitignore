@@ -5,3 +5,8 @@ local.properties
 *.iml
 .verification/
 .toolchain/
+.kotlin/
+.codex-finalizer/
+presentation-build/
+presentation-output/
+releases/phase1/*.apk
