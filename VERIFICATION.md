@@ -1,5 +1,14 @@
 # Verification — Mobility Assist
 
+## Route matching and possible-stairs preview (2026-10-11)
+
+- `clean testDebugUnitTest assembleDebug lintDebug` completed successfully with JDK 17 and Android SDK 35. All 107 JVM tests passed; lint found 0 errors and 28 warnings.
+- Debug APK: `app/build/outputs/apk/debug/app-debug.apk`, versionCode 12, versionName `5.1-route-stairs-preview`, 126,786,523 bytes, SHA-256 `84B1E224E5EFCA620ED8AF07B519B56A99A65EC4626FDD8E7A72E37C49014233`.
+- Tests cover route projection, larger off-route tolerance, route-line turn inference, straight guidance, and repeated horizontal-edge stair candidates. The Mappls config task parsed the current pair successfully.
+- Phone verification is still required for spoken turn timing, GPS map matching, rerouting, stair misses, and false possible-stairs alerts. This version does not classify ascending versus descending steps or count them.
+
+---
+
 ## Live walking guidance update (2026-10-11)
 
 - `testDebugUnitTest assembleDebug lintDebug` completed successfully with JDK 17 and Android SDK 35; 101 JVM tests passed with 0 failures and 0 errors. Lint reported 0 errors and 26 warnings.

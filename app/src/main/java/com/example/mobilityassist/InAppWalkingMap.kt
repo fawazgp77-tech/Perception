@@ -107,7 +107,7 @@ class InAppWalkingMap(
         val m = map ?: return
         val latLng = LatLng(location.latitude, location.longitude)
         val marker = currentMarker
-        if (marker == null) currentMarker = m.addMarker(MarkerOptions().position(latLng).title("You are here"))
+        if (marker == null) currentMarker = m.addMarker(MarkerOptions().position(latLng).title("Approximate position"))
         else marker.position = latLng
         val now = SystemClock.elapsedRealtime()
         if ((following || route == null && selected == null) && now - lastPanMs >= 750L) {

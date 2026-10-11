@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "5.1-live-guidance"
+        versionCode = 12
+        versionName = "5.1-route-stairs-preview"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

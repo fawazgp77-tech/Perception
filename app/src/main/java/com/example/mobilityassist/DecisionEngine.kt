@@ -41,6 +41,7 @@ enum class Warning(val text: String, val urgent: Boolean = false) {
     SCAN_LEFT("Stop. Turn the phone left to check for a clear path.", true),
     SCAN_RIGHT("Stop. Turn the phone right to check for a clear path.", true),
     SCAN_SIDES("Stop. Slowly turn the phone left or right to check for a clear path.", true),
+    POSSIBLE_STAIRS("Possible stairs ahead. Stop and check the steps.", true),
     POSSIBLE_WALL("Stop. Check for a clear path."),
     POSSIBLE_OBSTRUCTION("Stop. Slowly turn the phone left or right to check for a clear path."),
     PATH_BLOCKED("Stop. Slowly turn the phone left or right to check for a clear path."),
@@ -98,6 +99,7 @@ class ScanRecoveryTracker {
             reset()
             return candidate
         }
+        if (candidate == Warning.POSSIBLE_STAIRS) return candidate
         if (!waiting) return candidate
         if (!viewReliable || path == null || !path.fresh) return candidate
         clearSamples = if (path.forwardClear &&
@@ -192,6 +194,7 @@ class WarningGate(private val cooldownMs: Long = 6_000) {
             lastTime?.let { nowMs - it >= 2_000L } == true
         val perWarningCooldown = when (warning) {
             Warning.STOP -> 4_000L
+            Warning.POSSIBLE_STAIRS -> 20_000L
             Warning.SCAN_LEFT, Warning.SCAN_RIGHT, Warning.SCAN_SIDES -> 10_000L
             Warning.POSSIBLE_WALL, Warning.POSSIBLE_OBSTRUCTION, Warning.PATH_BLOCKED, Warning.PATH_LEFT,
             Warning.PATH_RIGHT, Warning.PATH_CLEAR -> 15_000L

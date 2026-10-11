@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val engine = DecisionEngine()
     private val scanRecovery = ScanRecoveryTracker()
+    private val stairDetector = StairPatternDetector()
+    private val stairTracker = StairPatternTracker()
     private val stabilizer = GuidanceStabilizer()   // Analysis worker only.
     private var guidanceGeneration = -1              // Analysis worker only.
     private val metrics = PipelineMetrics()
@@ -514,7 +516,7 @@ class MainActivity : ComponentActivity() {
         }
         if (!locationTracker.isEnabled()) { updateLocationStatus(); return }
         val origin = locationTracker.latest
-        if (!PreciseLocationTracker.usable(origin)) {
+        if (!PreciseLocationTracker.usable(origin, 40f)) {
             locationTracker.refresh()
             updateLocationStatus()
             destinationSearchStatus.setText(R.string.location_wait_for_route)
@@ -576,7 +578,7 @@ class MainActivity : ComponentActivity() {
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(R.string.start_navigation) { _, _ ->
                 val latest = locationTracker.latest
-                val moved = latest == null || !PreciseLocationTracker.usable(latest) ||
+                val moved = latest == null || !PreciseLocationTracker.usable(latest, 40f) ||
                     WalkingGuidance.distanceMeters(
                         GeoPosition(origin.latitude, origin.longitude),
                         GeoPosition(latest.latitude, latest.longitude)) > 35.0
@@ -592,6 +594,7 @@ class MainActivity : ComponentActivity() {
         walkingRoute = route
         walkingGuidance = guidanceFor(route)
         rerouting = false
+        lastRerouteMs = 0L
         showScanner()
         navigationStatus.visibility = View.VISIBLE
         navigationStatus.text = getString(R.string.navigation_active, route.destinationName)
@@ -612,7 +615,7 @@ class MainActivity : ComponentActivity() {
 
     private fun guidanceFor(value: WalkingRoute): WalkingGuidance {
         val shape = value.route.getCoordinates().map { GeoPosition(it.latitude(), it.longitude()) }
-        val turns = value.route.legs().orEmpty().flatMap { it.steps().orEmpty() }.mapNotNull { step ->
+        val mappedTurns = value.route.legs().orEmpty().flatMap { it.steps().orEmpty() }.mapNotNull { step ->
             val maneuver = step.maneuver() ?: return@mapNotNull null
             if (maneuver.type() == "depart" || maneuver.type() == "arrive") return@mapNotNull null
             val modifier = maneuver.modifier()?.lowercase().orEmpty()
@@ -621,30 +624,46 @@ class MainActivity : ComponentActivity() {
                 modifier.contains("slight right") -> "Take a slight right"
                 modifier.contains("left") -> "Turn left"
                 modifier.contains("right") -> "Turn right"
-                modifier.contains("straight") -> "Continue straight"
+                modifier.contains("straight") -> null // Periodic straight cues use route progress.
                 modifier.contains("uturn") || modifier.contains("u-turn") -> "Turn around"
                 else -> null
             } ?: return@mapNotNull null
             val point = maneuver.location() ?: return@mapNotNull null
             RouteTurn(GeoPosition(point.latitude(), point.longitude()), instruction)
         }
+        val inferredTurns = RouteGeometry.inferredTurns(shape)
+        val turns = mappedTurns + inferredTurns.filter { inferred ->
+            mappedTurns.none { WalkingGuidance.distanceMeters(it.position, inferred.position) < 30.0 }
+        }
+        Log.d("MobilityAssist", "Walking maneuvers: Mappls=${mappedTurns.size}, geometry=${inferredTurns.size}")
         return WalkingGuidance(shape, turns,
             GeoPosition(value.destination.latitude(), value.destination.longitude()))
     }
 
     private fun onLocationFix(location: Location) {
         updateLocationStatus()
-        walkingMap?.updatePosition(location)
-        if (walkingRoute == null || !scanningEnabled) return
+        if (walkingRoute == null || !scanningEnabled) {
+            walkingMap?.updatePosition(location)
+            return
+        }
         if (paused || failed || !hasCameraPermission()) return
-        if (!PreciseLocationTracker.usable(location, 25f)) {
+        if (!PreciseLocationTracker.usable(location, 45f)) {
+            walkingMap?.updatePosition(location)
             navigationStatus.setText(R.string.navigation_location_uncertain)
             feedback.speak(getString(R.string.navigation_location_uncertain),
                 SpeechPriority.IMPORTANT, "location_uncertain", 30_000L)
             return
         }
         val cue = walkingGuidance?.update(
-            GeoPosition(location.latitude, location.longitude), location.accuracy) ?: return
+            GeoPosition(location.latitude, location.longitude), location.accuracy)
+        val match = walkingGuidance?.lastMatch
+        val display = if (match != null && match.distanceMeters <=
+            maxOf(35.0, location.accuracy * 1.5)) Location(location).apply {
+                latitude = match.point.latitude
+                longitude = match.point.longitude
+            } else location
+        walkingMap?.updatePosition(display)
+        if (cue == null) return
         if (navigationStatus.text.toString() != cue.text) navigationStatus.text = cue.text
         if (cue.key == "reroute") rerouteFrom(location)
         val priority = if (cue.key.startsWith("turn_now_") || cue.key == "reroute")
@@ -670,9 +689,13 @@ class MainActivity : ComponentActivity() {
                     walkingGuidance = guidanceFor(updated)
                     walkingMap?.setRoute(updated)
                     navigationStatus.setText(R.string.navigation_route_updated)
+                    feedback.speak("Walking route updated. Check the next instruction.",
+                        SpeechPriority.IMPORTANT, "map_route_updated", 5_000L)
                 }.onFailure { error ->
                     Log.w("MobilityAssist", "Rerouting failed", error)
                     navigationStatus.setText(R.string.route_failed)
+                    feedback.speak("Cannot update the walking route. Stop and check your location.",
+                        SpeechPriority.URGENT, "map_route_failed", 15_000L)
                 }
             }
         }
@@ -755,6 +778,8 @@ class MainActivity : ComponentActivity() {
                             if (guidanceGeneration != token) {
                                 stabilizer.reset()
                                 scanRecovery.reset()
+                                stairDetector.reset()
+                                stairTracker.reset()
                                 pathSegmenter?.reset()
                                 guidanceGeneration = token
                             }
@@ -795,11 +820,22 @@ class MainActivity : ComponentActivity() {
                                 pathResult, result.objects,
                                 reliableView
                             )
-                            val candidate = scanRecovery.observe(objectWarning ?: pathWarning,
+                            val stairWarning = if (reliableView) try {
+                                stairTracker.observe(stairDetector.maybeAnalyze(frame))
+                            } catch (error: Exception) {
+                                Log.w("MobilityAssist", "Stair pattern analysis failed", error)
+                                stairTracker.reset()
+                                null
+                            } else {
+                                stairTracker.reset()
+                                null
+                            }
+                            val candidate = scanRecovery.observe(stairWarning ?: objectWarning ?: pathWarning,
                                 pathResult, reliableView, result.objects)
                             // PathGuidanceTracker confirms independent model results. Do not
                             // require more CameraX frames or count a cached mask as evidence.
                             val warning = if (candidate == Warning.PATH_CLEAR ||
+                                candidate == Warning.POSSIBLE_STAIRS ||
                                 candidate == pathWarning && pathWarning != null) {
                                 stabilizer.reset()
                                 candidate
