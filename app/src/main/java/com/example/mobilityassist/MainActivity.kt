@@ -105,6 +105,22 @@ class MainActivity : ComponentActivity() {
     private lateinit var miniMapHost: FrameLayout
     private lateinit var expandedMapHost: FrameLayout
     private lateinit var navigationStatus: TextView
+    private lateinit var voice: ForegroundVoiceController
+    private lateinit var microphoneToggle: Button
+    private lateinit var scannerMicrophoneToggle: Button
+    private lateinit var navigationMenu: View
+    private lateinit var depthOption: CheckBox
+    private enum class VoiceStage { MENU, DESTINATION, CANDIDATE, ROUTE_CONFIRM, SCANNER }
+    private var voiceStage = VoiceStage.MENU
+    private var voiceSearchPending = false
+    private var voiceRouteFlow = false
+    private var pendingVoiceRouteStart = false
+    private var voiceCandidates = emptyList<PlaceCandidate>()
+    private var voiceCandidateIndex = 0
+    private var routeConfirmationDialog: AlertDialog? = null
+    private var confirmRouteByVoice: (() -> Unit)? = null
+    private var splashFinished = false
+    private var introPrompted = false
 
     // -----------------------------------------------------------------------
     // Phase 3 UI views
@@ -159,6 +175,14 @@ class MainActivity : ComponentActivity() {
             !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
         if (hasLocationPermission()) locationTracker.start()
         updateLocationStatus()
+        updateMicrophoneButton()
+        if (hasMicrophonePermission() && splashFinished) {
+            voice.setVisible(true)
+            if (!introPrompted) maybePromptIntro()
+        } else if (!hasMicrophonePermission()) {
+            findViewById<TextView>(R.id.voiceStatus).text =
+                "Microphone permission is off. Tap the microphone button for voice commands."
+        }
         if (cameraGranted) {
             status.setText(R.string.scanning)
             updateButton()
@@ -202,6 +226,10 @@ class MainActivity : ComponentActivity() {
         destinationSearchStatus = findViewById(R.id.destinationSearchStatus)
         menuMapStatus = findViewById(R.id.menuMapStatus)
         menuMapHost = findViewById(R.id.menuMapHost)
+        microphoneToggle = findViewById(R.id.microphoneToggle)
+        scannerMicrophoneToggle = findViewById(R.id.scannerMicrophoneToggle)
+        navigationMenu = findViewById(R.id.navigationMenu)
+        depthOption = findViewById(R.id.depthOption)
         speechToggle   = findViewById(R.id.speechToggle)
         lightingStatus = findViewById(R.id.lightingStatus)
         angleStatus    = findViewById(R.id.angleStatus)
@@ -217,19 +245,39 @@ class MainActivity : ComponentActivity() {
         feedback = SpeechHapticManager(this) {
             findViewById<TextView>(R.id.speechStatus).text = it
             findViewById<TextView>(R.id.menuSpeechStatus).text = it
+            maybePromptIntro()
         }
+        voice = ForegroundVoiceController(this, ::onVoiceWords) {
+            findViewById<TextView>(R.id.voiceStatus).text = it
+        }
+        feedback.setSpeechActivityListener { voice.setSpeaking(it) }
         val preferences = getSharedPreferences("mobility_assist", MODE_PRIVATE)
+        microphoneToggle.setOnClickListener {
+            if (!hasMicrophonePermission()) {
+                val asked = preferences.getBoolean("microphone_asked", false)
+                if (asked && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO))
+                    openAppSettings()
+                else {
+                    preferences.edit().putBoolean("microphone_asked", true).apply()
+                    permission.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+                }
+            } else {
+                voice.setEnabled(!voice.isEnabled())
+                updateMicrophoneButton()
+                if (voice.isEnabled()) promptForCurrentStage()
+            }
+        }
+        scannerMicrophoneToggle.setOnClickListener { microphoneToggle.performClick() }
         speechToggle.isChecked = preferences.getBoolean("speech_enabled", true)
         feedback.setSpeechEnabled(speechToggle.isChecked)
         speechToggle.setOnCheckedChangeListener { _, checked ->
             preferences.edit().putBoolean("speech_enabled", checked).apply()
             feedback.setSpeechEnabled(checked)
+            if (checked) maybePromptIntro()
         }
-        findViewById<Button>(R.id.startAssistance).setOnClickListener { showScanner() }
-        findViewById<Button>(R.id.startDepthAssistance).setOnClickListener {
-            startActivity(Intent(this, ArCoreDepthActivity::class.java))
-        }
+        findViewById<Button>(R.id.startAssistance).setOnClickListener { startSelectedAssistance() }
         findViewById<Button>(R.id.backToMenu).setOnClickListener { showMenu() }
+        findViewById<Button>(R.id.openNavigation).setOnClickListener { openNavigationMenu() }
         findViewById<Button>(R.id.speakDestination).setOnClickListener { requestDestinationSpeech() }
         findViewById<Button>(R.id.previewWalkingRoute).setOnClickListener {
             confirmWalkingRoute()
@@ -373,12 +421,87 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { fail(getString(R.string.detector_unavailable), error) }
             }
         }
-        if (!hasCameraPermission() || !hasFineLocationPermission()) requestPermissions()
+        if (!hasCameraPermission() || !hasFineLocationPermission() ||
+            !hasMicrophonePermission()) requestPermissions()
         else locationTracker.start()
         updateLocationStatus()
+        updateMicrophoneButton()
+        animateSplash()
+    }
+
+    private fun animateSplash() {
+        val splash = findViewById<View>(R.id.splashPanel)
+        val content = findViewById<View>(R.id.splashContent)
+        content.translationY = 320f * resources.displayMetrics.density
+        content.scaleX = 1.38f
+        content.scaleY = 1.38f
+        content.alpha = 0f
+        content.animate().translationY(0f).scaleX(1f).scaleY(1f).alpha(1f)
+            .setDuration(1_200L).withEndAction {
+                mainHandler.postDelayed({
+                    splash.animate().alpha(0f).setDuration(350L).withEndAction {
+                        splash.visibility = View.GONE
+                        splashFinished = true
+                        maybePromptIntro()
+                    }.start()
+                }, 650L)
+            }.start()
+    }
+
+    private fun hasMicrophonePermission() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun updateMicrophoneButton() {
+        microphoneToggle.setText(if (hasMicrophonePermission() && voice.isEnabled())
+            R.string.mic_on else R.string.mic_off)
+        scannerMicrophoneToggle.setText(if (hasMicrophonePermission() && voice.isEnabled())
+            R.string.mic_short_on else R.string.mic_short_off)
+        scannerMicrophoneToggle.contentDescription =
+            getString(if (hasMicrophonePermission() && voice.isEnabled()) R.string.mic_on else R.string.mic_off)
+    }
+
+    private fun maybePromptIntro() {
+        if (!::voice.isInitialized || !splashFinished || introPrompted ||
+            !hasMicrophonePermission() || !active || !feedback.isSpeechReady()) return
+        introPrompted = true
+        voice.setVisible(true)
+        voiceStage = VoiceStage.MENU
+        promptForCurrentStage()
+    }
+
+    private fun voicePrompt(text: String) {
+        findViewById<TextView>(R.id.voiceStatus).text = text
+        voice.setSpeaking(true)
+        if (!feedback.speak(text, SpeechPriority.URGENT, "voice_prompt_${SystemClock.elapsedRealtime()}", 0L))
+            voice.setSpeaking(false)
+    }
+
+    private fun promptForCurrentStage() {
+        if (!hasMicrophonePermission() || !voice.isEnabled()) return
+        when (voiceStage) {
+            VoiceStage.MENU -> voicePrompt("Say Start Camera Assistance or Enter Destination.")
+            VoiceStage.DESTINATION -> voicePrompt("Where would you like to go? Say a place or address.")
+            VoiceStage.CANDIDATE -> announceCandidate()
+            VoiceStage.ROUTE_CONFIRM -> Unit
+            VoiceStage.SCANNER -> voicePrompt("Camera Assistance is active. Say back to menu or microphone off.")
+        }
+    }
+
+    private fun startSelectedAssistance() {
+        if (depthOption.isChecked) startActivity(Intent(this, ArCoreDepthActivity::class.java))
+        else showScanner()
+    }
+
+    private fun openNavigationMenu() {
+        navigationMenu.visibility = View.VISIBLE
+        voiceStage = VoiceStage.DESTINATION
+        locationTracker.refresh()
+        if (voice.isEnabled()) promptForCurrentStage()
     }
 
     private fun showScanner() {
+        voiceStage = VoiceStage.SCANNER
         menuPanel.visibility = View.GONE
         scannerPanel.visibility = View.VISIBLE
         scanningEnabled = true
@@ -389,9 +512,13 @@ class MainActivity : ComponentActivity() {
             if (hasCameraPermission()) preview.post { bindCamera() }
             else requestPermissions()
         }
+        updateCameraAspect(false)
     }
 
     private fun showMenu() {
+        voiceSearchPending = false
+        voiceRouteFlow = false
+        pendingVoiceRouteStart = false
         stopNavigation()
         scanningEnabled = false
         angleSuitable = false
@@ -408,6 +535,130 @@ class MainActivity : ComponentActivity() {
         resetPhase3StateToIdle()
         scannerPanel.visibility = View.GONE
         menuPanel.visibility = View.VISIBLE
+        voiceStage = VoiceStage.MENU
+        if (voice.isEnabled()) promptForCurrentStage()
+    }
+
+    private fun onVoiceWords(raw: String) {
+        val command = VoiceCommands.parse(raw)
+        if (command == VoiceIntent.MIC_OFF) {
+            voice.setEnabled(false)
+            updateMicrophoneButton()
+            feedback.speak("Microphone off. Tap the microphone button to turn it on.",
+                SpeechPriority.IMPORTANT, "mic_off_confirmation", 0L)
+            return
+        }
+        if (command == VoiceIntent.MIC_ON) {
+            voice.setEnabled(true)
+            updateMicrophoneButton()
+            promptForCurrentStage()
+            return
+        }
+        if (command == VoiceIntent.MENU) { showMenu(); return }
+        if (voiceSearchPending) return
+        when (voiceStage) {
+            VoiceStage.MENU -> when (command) {
+                VoiceIntent.CAMERA -> startSelectedAssistance()
+                VoiceIntent.NAVIGATE -> openNavigationMenu()
+                else -> voicePrompt("Say Start Camera Assistance or Enter Destination.")
+            }
+            VoiceStage.DESTINATION -> when (command) {
+                VoiceIntent.CAMERA -> startSelectedAssistance()
+                else -> {
+                    val query = raw.trim().replace(
+                        Regex("(?i)^(please\\s+)?(enter destination|navigate|take me|go|walk|directions)\\s+(to\\s+)?"),
+                        "").trim()
+                    if (query.length < 3) {
+                        promptForCurrentStage()
+                        return
+                    }
+                    voiceSearchPending = true
+                    destinationInput.setText(query)
+                    destinationInput.setSelection(destinationInput.length())
+                    voicePrompt("Searching for $query.")
+                }
+            }
+            VoiceStage.CANDIDATE -> when (command) {
+                VoiceIntent.YES -> {
+                    val candidate = voiceCandidates.getOrNull(voiceCandidateIndex) ?: return
+                    voiceStage = VoiceStage.ROUTE_CONFIRM
+                    voiceRouteFlow = true
+                    voicePrompt("Finding the walking route to ${candidate.name}.")
+                    selectDestination(candidate) {
+                        if (voiceRouteFlow && voiceStage == VoiceStage.ROUTE_CONFIRM)
+                            confirmWalkingRoute()
+                    }
+                }
+                VoiceIntent.NO -> {
+                    voiceCandidateIndex++
+                    if (voiceCandidateIndex >= voiceCandidates.size) {
+                        voiceStage = VoiceStage.DESTINATION
+                        voicePrompt("No more matching places. Say a different destination.")
+                    } else announceCandidate()
+                }
+                else -> voicePrompt("Say yes to select this place, or no for the next result.")
+            }
+            VoiceStage.ROUTE_CONFIRM -> when (command) {
+                VoiceIntent.YES -> {
+                    if (confirmRouteByVoice == null) {
+                        voicePrompt("Still finding the walking route. Please wait.")
+                        return
+                    }
+                    routeConfirmationDialog?.dismiss()
+                    routeConfirmationDialog = null
+                    confirmRouteByVoice?.invoke()
+                    confirmRouteByVoice = null
+                }
+                VoiceIntent.NO -> {
+                    routeRequestId++
+                    routeConfirmationDialog?.dismiss()
+                    routeConfirmationDialog = null
+                    confirmRouteByVoice = null
+                    voiceRouteFlow = false
+                    pendingVoiceRouteStart = false
+                    voiceStage = VoiceStage.DESTINATION
+                    voicePrompt("Route cancelled. Say another destination.")
+                }
+                else -> voicePrompt("Say yes to start walking guidance, or no to cancel.")
+            }
+            VoiceStage.SCANNER -> when (command) {
+                VoiceIntent.NAVIGATE -> {
+                    showMenu()
+                    openNavigationMenu()
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    private fun announceCandidate() {
+        val candidate = voiceCandidates.getOrNull(voiceCandidateIndex) ?: return
+        val locality = candidate.address.substringBefore(',').trim()
+        val spoken = if (locality.isNotBlank() && !candidate.name.contains(locality, true))
+            "${candidate.name}, $locality" else candidate.name
+        voicePrompt("Did you mean $spoken? Say yes or no.")
+    }
+
+    private fun updateCameraAspect(expanded: Boolean) {
+        val area = findViewById<FrameLayout>(R.id.cameraArea)
+        area.post {
+            val params = area.layoutParams as LinearLayout.LayoutParams
+            if (expanded) {
+                params.height = 0
+                params.weight = 1f
+            } else {
+                val panel = findViewById<LinearLayout>(R.id.scannerPanel)
+                val otherHeight = (0 until panel.childCount).sumOf { index ->
+                    panel.getChildAt(index).let { child ->
+                        if (child === area || child.visibility == View.GONE) 0 else child.height
+                    }
+                }
+                val available = (panel.height - otherHeight).coerceAtLeast(1)
+                params.height = minOf((area.width * 4f / 3f).toInt(), available)
+                params.weight = 0f
+            }
+            area.layoutParams = params
+        }
     }
 
     private fun requestDestinationSpeech() {
@@ -455,13 +706,32 @@ class MainActivity : ComponentActivity() {
                             }
                             destinationSuggestions.addView(button)
                         }
-                    }.onFailure { showMapFailure(it, destinationSearchStatus) }
+                        if (voiceSearchPending) {
+                            voiceSearchPending = false
+                            voiceCandidates = choices
+                            voiceCandidateIndex = 0
+                            if (choices.isEmpty()) {
+                                voiceStage = VoiceStage.DESTINATION
+                                voicePrompt("I could not find that place. Say a more specific destination.")
+                            } else {
+                                voiceStage = VoiceStage.CANDIDATE
+                                announceCandidate()
+                            }
+                        }
+                    }.onFailure {
+                        showMapFailure(it, destinationSearchStatus)
+                        if (voiceSearchPending) {
+                            voiceSearchPending = false
+                            voiceStage = VoiceStage.DESTINATION
+                            voicePrompt("Place search failed. Check the connection and say the destination again.")
+                        }
+                    }
                 }
             }
         }.also { mainHandler.postDelayed(it, 400L) }
     }
 
-    private fun selectDestination(candidate: PlaceCandidate) {
+    private fun selectDestination(candidate: PlaceCandidate, onResolved: (() -> Unit)? = null) {
         destinationInput.setText(candidate.label)
         destinationInput.setSelection(destinationInput.length())
         searchRunnable?.let(mainHandler::removeCallbacks)
@@ -479,7 +749,14 @@ class MainActivity : ComponentActivity() {
                     walkingMap?.setSelectedPlace(point)
                     destinationSearchStatus.text = getString(R.string.destination_selected, candidate.label)
                     menuMapStatus.setText(R.string.map_destination_preview)
-                }.onFailure { showMapFailure(it, destinationSearchStatus) }
+                    onResolved?.invoke()
+                }.onFailure {
+                    showMapFailure(it, destinationSearchStatus)
+                    if (onResolved != null) {
+                        voiceStage = VoiceStage.DESTINATION
+                        voicePrompt("I could not locate that place. Say another destination.")
+                    }
+                }
             }
         }
     }
@@ -508,20 +785,34 @@ class MainActivity : ComponentActivity() {
             destinationSearchStatus.setText(R.string.destination_choose)
             return
         }
-        if (!hasCameraPermission()) { requestPermissions(); return }
+        if (!hasCameraPermission()) {
+            requestPermissions()
+            if (voiceRouteFlow) voicePrompt("Camera permission is needed to start guidance.")
+            return
+        }
         if (!hasFineLocationPermission()) {
             updateLocationStatus()
             Toast.makeText(this, R.string.location_permission_required, Toast.LENGTH_LONG).show()
+            if (voiceRouteFlow) voicePrompt("Precise location permission is needed to start walking guidance.")
             return
         }
-        if (!locationTracker.isEnabled()) { updateLocationStatus(); return }
+        if (!locationTracker.isEnabled()) {
+            updateLocationStatus()
+            if (voiceRouteFlow) voicePrompt("Device location is off. Please turn it on.")
+            return
+        }
         val origin = locationTracker.latest
         if (!PreciseLocationTracker.usable(origin, 40f)) {
             locationTracker.refresh()
             updateLocationStatus()
             destinationSearchStatus.setText(R.string.location_wait_for_route)
+            if (voiceRouteFlow && !pendingVoiceRouteStart) {
+                pendingVoiceRouteStart = true
+                voicePrompt("Waiting for a precise location. Please move outdoors. I will continue when it is ready.")
+            }
             return
         }
+        pendingVoiceRouteStart = false
         val requestId = ++routeRequestId
         val routeButton = findViewById<Button>(R.id.previewWalkingRoute)
         routeButton.isEnabled = false
@@ -531,6 +822,11 @@ class MainActivity : ComponentActivity() {
                 routeRequestId++
                 routeButton.isEnabled = true
                 destinationSearchStatus.setText(R.string.route_timeout)
+                if (voiceRouteFlow) {
+                    voiceStage = VoiceStage.DESTINATION
+                    voiceRouteFlow = false
+                    voicePrompt("The walking route timed out. Please try the destination again.")
+                }
             }
         }, 20_000L)
         routeService.routeFrom(origin!!, point, destination.label) { result ->
@@ -554,6 +850,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }.onFailure { error ->
                     showMapFailure(error, destinationSearchStatus)
+                    if (voiceRouteFlow) {
+                        voiceStage = VoiceStage.DESTINATION
+                        voiceRouteFlow = false
+                        voicePrompt("I could not find a walking route. Try another destination.")
+                    }
                 }
             }
         }
@@ -569,28 +870,39 @@ class MainActivity : ComponentActivity() {
             route.destinationName, minutes, km)
         val spokenName = route.destinationName.substringBefore(',').trim()
             .ifBlank { route.destinationName }
-        feedback.speak("From your current location to $spokenName. About $minutes minutes. Start walking navigation?",
-            SpeechPriority.IMPORTANT,
-            "route_confirmation", 0L)
-        AlertDialog.Builder(this)
+        voiceStage = VoiceStage.ROUTE_CONFIRM
+        val startRoute = {
+            val latest = locationTracker.latest
+            val moved = latest == null || !PreciseLocationTracker.usable(latest, 40f) ||
+                WalkingGuidance.distanceMeters(
+                    GeoPosition(origin.latitude, origin.longitude),
+                    GeoPosition(latest.latitude, latest.longitude)) > 35.0
+            if (moved) {
+                Toast.makeText(this, R.string.location_unavailable, Toast.LENGTH_LONG).show()
+                confirmWalkingRoute()
+            } else startNavigation(route)
+        }
+        confirmRouteByVoice = startRoute
+        voicePrompt("From your current location to $spokenName. About $minutes minutes. Say yes to start walking navigation, or no to cancel.")
+        routeConfirmationDialog = AlertDialog.Builder(this)
             .setTitle(R.string.route_confirm_title)
             .setMessage(message)
-            .setNegativeButton(R.string.cancel, null)
+            .setNegativeButton(R.string.cancel) { _, _ ->
+                confirmRouteByVoice = null
+                voiceRouteFlow = false
+                voiceStage = VoiceStage.DESTINATION
+            }
             .setPositiveButton(R.string.start_navigation) { _, _ ->
-                val latest = locationTracker.latest
-                val moved = latest == null || !PreciseLocationTracker.usable(latest, 40f) ||
-                    WalkingGuidance.distanceMeters(
-                        GeoPosition(origin.latitude, origin.longitude),
-                        GeoPosition(latest.latitude, latest.longitude)) > 35.0
-                if (moved) {
-                    Toast.makeText(this, R.string.location_unavailable, Toast.LENGTH_LONG).show()
-                    confirmWalkingRoute()
-                } else startNavigation(route)
+                confirmRouteByVoice = null
+                startRoute()
             }
             .show()
     }
 
     private fun startNavigation(route: WalkingRoute) {
+        voiceStage = VoiceStage.SCANNER
+        voiceRouteFlow = false
+        pendingVoiceRouteStart = false
         walkingRoute = route
         walkingGuidance = guidanceFor(route)
         rerouting = false
@@ -642,6 +954,11 @@ class MainActivity : ComponentActivity() {
 
     private fun onLocationFix(location: Location) {
         updateLocationStatus()
+        if (pendingVoiceRouteStart && PreciseLocationTracker.usable(location, 40f) &&
+            selectedDestination != null && selectedPoint != null) {
+            pendingVoiceRouteStart = false
+            confirmWalkingRoute()
+        }
         if (walkingRoute == null || !scanningEnabled) {
             walkingMap?.updatePosition(location)
             return
@@ -713,6 +1030,7 @@ class MainActivity : ComponentActivity() {
             expandedMapHost.visibility = View.GONE
         }
         if (active && scanningEnabled && !paused) preview.post { bindCamera() }
+        updateCameraAspect(expanded)
     }
 
     private fun stopNavigation() {
@@ -1231,6 +1549,11 @@ class MainActivity : ComponentActivity() {
             getSharedPreferences("mobility_assist", MODE_PRIVATE).edit()
                 .putBoolean("location_asked", true).apply()
         }
+        val preferences = getSharedPreferences("mobility_assist", MODE_PRIVATE)
+        if (!hasMicrophonePermission() && !preferences.getBoolean("microphone_asked", false)) {
+            missing += Manifest.permission.RECORD_AUDIO
+            preferences.edit().putBoolean("microphone_asked", true).apply()
+        }
         if (missing.isNotEmpty()) permission.launch(missing.toTypedArray())
     }
 
@@ -1285,6 +1608,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         active = true
+        maybePromptIntro()
         locationTracker.start()
         updateLocationStatus()
         walkingMap?.onStart()
@@ -1297,6 +1621,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (::voice.isInitialized && hasMicrophonePermission() && splashFinished)
+            voice.setVisible(true)
+        maybePromptIntro()
         locationTracker.start()
         if (hasLocationPermission() && locationTracker.isEnabled()) locationTracker.refresh()
         updateLocationStatus()
@@ -1310,6 +1637,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        if (::voice.isInitialized) voice.setVisible(false)
         walkingMap?.onPause()
         super.onPause()
     }
@@ -1343,6 +1671,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        routeConfirmationDialog?.dismiss()
+        if (::voice.isInitialized) voice.close()
         stopNavigation()
         walkingMap?.destroy()
         walkingMap = null

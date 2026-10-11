@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- App identity -->
-    <string name="app_name">Mobility Assist</string>
-    <string name="screen_title">Mobility Assist</string>
-    <string name="menu_title">Mobility Assist</string>
+    <string name="app_name">Perception</string>
+    <string name="screen_title">Perception</string>
+    <string name="menu_title">Perception</string>
+    <string name="tagline">See the path. Hear the world.\nMove independently.</string>
+    <string name="navigate">Navigate</string>
+    <string name="voice_starting">Preparing voice commands…</string>
+    <string name="mic_on">Microphone on · tap to turn off</string>
+    <string name="mic_off">Microphone off · tap to turn on</string>
+    <string name="mic_short_on">Mic on</string>
+    <string name="mic_short_off">Mic off</string>
     <string name="enable_speech">Spoken obstacle guidance</string>
-    <string name="start_assistance">Start camera assistance</string>
+    <string name="start_assistance">Start Camera Assistance</string>
     <string name="start_depth_assistance">Try depth-enhanced assistance</string>
     <string name="depth_starting">Starting depth assistance…</string>
     <string name="depth_scanning">Depth assistance scanning</string>
@@ -69,9 +76,9 @@
 
     <!-- Existing Phase 1/2 strings — unchanged -->
     <string name="starting_detector">Starting detector…</string>
-    <string name="starting_speech">Starting offline speech…</string>
-    <string name="speech_ready">Offline voice ready</string>
-    <string name="speech_unavailable">Speech unavailable. Install an offline English TTS voice in Android settings. Vibration remains available on supported phones.</string>
+    <string name="starting_speech">Starting speech…</string>
+    <string name="speech_ready">Voice ready</string>
+    <string name="speech_unavailable">Speech unavailable. Install an English TTS voice in Android settings. Vibration remains available on supported phones.</string>
     <string name="speech_failed">Speech failed. Check Android text-to-speech settings. Vibration remains available on supported phones.</string>
     <string name="pause_assistance">Pause assistance</string>
     <string name="resume_assistance">Resume assistance</string>

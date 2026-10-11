@@ -7,6 +7,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 /**
@@ -27,6 +28,7 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
     private var ready = false
     private var closed = false
     private var speechEnabled = true
+    private var onSpeechActivity: ((Boolean) -> Unit)? = null
     private var lastObstacleSpeechMs = Long.MIN_VALUE
 
     // -----------------------------------------------------------------------
@@ -50,15 +52,36 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 if (!closed) {
                     val engine = tts
-                    val voice = if (status == TextToSpeech.SUCCESS) engine?.voices
-                        ?.filter { !it.isNetworkConnectionRequired && it.locale.language == Locale.ENGLISH.language }
-                        ?.sortedBy { it.name }?.firstOrNull() else null
-                    ready = voice != null && engine?.setVoice(voice) == TextToSpeech.SUCCESS
+                    val englishVoices = if (status == TextToSpeech.SUCCESS) engine?.voices
+                        ?.filter { it.locale.language == Locale.ENGLISH.language }
+                        ?.sortedWith(compareBy({ it.isNetworkConnectionRequired }, { it.name }))
+                        .orEmpty() else emptyList()
+                    val voice = englishVoices.firstOrNull()
+                    ready = if (voice != null) engine?.setVoice(voice) == TextToSpeech.SUCCESS
+                        else status == TextToSpeech.SUCCESS &&
+                            (engine?.setLanguage(Locale.ENGLISH) ?: TextToSpeech.LANG_NOT_SUPPORTED) >=
+                                TextToSpeech.LANG_AVAILABLE
+                    engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                        override fun onStart(utteranceId: String?) = speechActivity(true)
+                        override fun onDone(utteranceId: String?) = speechActivity(false)
+                        @Deprecated("Android callback")
+                        override fun onError(utteranceId: String?) = speechActivity(false)
+                        override fun onStop(utteranceId: String?, interrupted: Boolean) = speechActivity(false)
+                    })
                     onStatus(appContext.getString(if (ready) R.string.speech_ready else R.string.speech_unavailable))
                 }
             }
         }
     }
+
+    private fun speechActivity(speaking: Boolean) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (!closed) onSpeechActivity?.invoke(speaking)
+        }
+    }
+
+    fun setSpeechActivityListener(listener: (Boolean) -> Unit) { onSpeechActivity = listener }
+    fun isSpeechReady() = ready && speechEnabled && !closed
 
     // -----------------------------------------------------------------------
     // Existing obstacle warning path — UNCHANGED

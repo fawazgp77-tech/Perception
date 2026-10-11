@@ -1,12 +1,12 @@
-# Mobility Assist — v5.1 route guidance and possible-step preview
+# Perception — voice-led navigation and camera assistance
 
-Mobility Assist is an Android prototype for blind users. The regular scanner uses the **v5.1 camera guidance** (v5.2 was reverted). It runs object detection, optional path segmentation, speech and vibration. The new walking mode keeps that same scanner open while showing a live Mappls map and speaking pedestrian turns. Camera obstacle warnings interrupt map guidance.
+Perception is an Android prototype for blind users. The regular scanner keeps the v5.1 camera guidance and possible-stairs cue. It runs object detection, optional path segmentation, speech and vibration. Walking mode keeps the scanner open while showing a live Mappls map and speaking pedestrian turns. Camera obstacle warnings interrupt map guidance.
 
 > This is not a validated mobility device. Camera models and GPS can miss hazards or place the user on the wrong side of a road. Use a cane, guide dog, or sighted assistance and independently verify crossings. No warning does not mean the path is safe.
 
 ## Run
 
-Requirements: Android Studio/JDK 17, Android SDK 35, Android 8.0+ phone with rear camera and preferably GPS, an offline English Text-to-Speech voice, and internet for Mappls search, map tiles, and routing. Camera analysis itself is on-device and works without internet. ARCore Depth is optional and separate from regular camera assistance.
+Requirements: Android Studio/JDK 17, Android SDK 35, Android 8.0+ phone with rear camera and preferably GPS, an English Text-to-Speech voice, and internet for Mappls search, map tiles, and routing. Perception prefers an offline English TTS voice and falls back to an installed English voice when needed. Camera analysis itself is on-device and works without internet. ARCore Depth is optional and separate from regular camera assistance.
 
 Mappls uses the two license/config files downloaded for the registered Android app. In the [Mappls Console](https://auth.mappls.com/), that app must use package `com.example.mobilityassist` and the SHA-256 of the signing certificate used for the APK. Download its matching `<appId>.a.conf` and `<appId>.a.olf` and place both in the **`app/` module root** beside `app/build.gradle.kts`. Keep only one matching pair there. They and the generated `app/src/main/assets/mappls-conf.txt` are Git-ignored; do not publish an APK containing your Mappls license without checking its terms. If your phone install uses another signing key, regenerate the Mappls files for that key. Mappls search and walking routing must be enabled for the app in the Console. Mappls publishes per-account daily usage quotas; "free" is subject to the account plan and is not unlimited.
 
@@ -31,7 +31,17 @@ Build:
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Or open the project in Android Studio and Run. On a fresh install, Android asks for Camera and precise/approximate Location access. An update with permission already granted will not show a new prompt. Approximate-only or denied location still permits camera assistance. The menu reports permission, disabled Location, acquisition, and accuracy states; use **Try current location again** after changing Settings.
+Or open the project in Android Studio and Run. On a fresh install, Android asks for Camera, precise/approximate Location, and Microphone access. An update with permission already granted will not show a new prompt. Approximate-only or denied location still permits camera assistance. The app starts location tracking automatically; it never asks the user to choose an origin. The menu reports permission, disabled Location, acquisition, and accuracy states; use **Try current location again** after changing Settings.
+
+## Voice-first use
+
+After the Perception splash, the app asks you to say **Start Camera Assistance** or **Enter Destination**. These are also the two large menu buttons. The Camera Assistance button opens the existing scanner; check **Try depth-enhanced assistance** below it first if the phone supports ARCore Depth. **Navigate** expands the existing destination controls without changing what their buttons do.
+
+The eye-and-path mark is a theme-matched vector placeholder. Replace `app/src/main/res/drawable/ic_perception_mark.xml` and `ic_launcher.xml` when the intended SVG is supplied.
+
+For voice navigation, say **Enter Destination**, then a place or address. Perception speaks the first Mappls suggestion using its short name and locality. Say **yes** to select it or **no** to hear the next suggestion. When the walking route and current location are ready, the app reads the short destination and estimated time. Say **yes** again to begin camera-plus-map guidance, or **no** to cancel. You can also type and tap through the same flow. A fresh precise location is required; after a weak fix the voice flow waits and resumes when a usable fix arrives.
+
+While Perception is visible, it restarts listening after each recognition result and pauses listening while the app speaks, to reduce feedback. Say **microphone off** to stop listening. Turning it back on requires tapping the large microphone control in the menu or the small **Mic off** control on the camera screen: a switched-off microphone cannot hear “microphone on.” The microphone stops when the app leaves the foreground. Android's speech recognizer is session-based and is not guaranteed to capture every command, especially in noise; buttons and TalkBack remain available. On-device recognition is used on Android 12+ when the phone provides it. Otherwise Android's recognition service is used with offline preference, but the service may use internet. Mappls navigation itself requires internet.
 
 ## Use walking navigation
 
@@ -61,6 +71,12 @@ Mappls integration uses the [Android SDK](https://developer.mappls.com/documenta
 ## Phone test checklist
 
 Use a sighted helper in a controlled, low-risk place; do not test on a live road.
+
+- [ ] On a fresh install, grant Microphone as well as Camera and precise Location. After the splash, hear the two menu options. Say “Start Camera Assistance” and verify the scanner opens.
+- [ ] Return to menu. Say “Enter Destination,” then an ambiguous place. Say “no” for the first result and verify the second is spoken; say “yes,” then confirm the route by saying “yes.” Verify camera and map both remain visible.
+- [ ] Say “microphone off” while the camera is open. Verify the button changes to **Mic off** and voice commands stop. Tap it to restore listening. Background the app and verify listening stops until it is visible again.
+- [ ] Test with no network or no offline recognizer; verify the buttons and typed destination still work. Test with a noisy room and TalkBack enabled.
+- [ ] Check the olive/cream menu, splash animation, preview proportions, separate translucent FPS box, side-by-side pause/menu buttons, and map expand/collapse on the actual phone size.
 
 - [ ] On fresh install, Camera and precise Location prompts appear. Denying Location leaves camera assistance functional.
 - [ ] With permissions granted and Location enabled, current coordinates and an accuracy estimate appear. Stale or poor fixes prevent route start.

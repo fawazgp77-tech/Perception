@@ -1,323 +1,188 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <ScrollView
-        android:id="@+id/menuPanel"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/menu_title"
-            android:textColor="#FFFFFF"
-            android:textSize="28sp"
-            android:paddingBottom="20dp" />
-
-        <CheckBox
-            android:id="@+id/speechToggle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/enable_speech"
-            android:checked="true"
-            android:minHeight="56dp" />
-
-        <TextView
-            android:id="@+id/menuSpeechStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/starting_speech"
-            android:textColor="#FFE082"
-            android:accessibilityLiveRegion="polite"
-            android:paddingBottom="12dp" />
-
-        <Button
-            android:id="@+id/startAssistance"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:text="@string/start_assistance" />
-
-        <Button
-            android:id="@+id/startDepthAssistance"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:text="@string/start_depth_assistance" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/map_navigation_title"
-            android:textColor="#FFFFFF"
-            android:textSize="22sp"
-            android:paddingTop="24dp" />
-
-        <TextView
-            android:id="@+id/currentLocationStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/location_waiting"
-            android:accessibilityLiveRegion="polite"
-            android:paddingVertical="10dp" />
-
-        <Button
-            android:id="@+id/retryLocation"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/retry_location" />
-
-        <EditText
-            android:id="@+id/destinationInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/destination_hint"
-            android:inputType="textPostalAddress"
-            android:importantForAutofill="no"
-            android:singleLine="true"
-            android:minHeight="56dp" />
-
-        <TextView
-            android:id="@+id/destinationSearchStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:accessibilityLiveRegion="polite"
-            android:paddingVertical="6dp"
-            android:text="@string/destination_search_prompt" />
-
-        <LinearLayout
-            android:id="@+id/destinationSuggestions"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <FrameLayout
-            android:id="@+id/menuMapHost"
-            android:layout_width="match_parent"
-            android:layout_height="220dp"
-            android:layout_marginVertical="8dp"
-            android:background="#202A32">
-            <TextView
-                android:id="@+id/menuMapStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top"
-                android:background="#CC202A32"
-                android:padding="8dp"
-                android:text="@string/map_loading" />
-        </FrameLayout>
-
-        <Button
-            android:id="@+id/speakDestination"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/speak_destination" />
-
-        <Button
-            android:id="@+id/previewWalkingRoute"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/enter_destination" />
-
-        <Button
-            android:id="@+id/saveHome"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/save_home" />
-
-        <Button
-            android:id="@+id/navigateHome"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="@string/navigate_home" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/map_navigation_note"
-            android:textColor="#FFFFFF"
-            android:paddingTop="16dp" />
-    </LinearLayout>
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/olive_dark">
+    <ScrollView android:id="@+id/menuPanel" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:fillViewport="true"
+        android:background="@color/cream">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="24dp">
+            <ImageView android:layout_width="72dp" android:layout_height="72dp"
+                android:src="@drawable/ic_perception_mark" android:contentDescription="@string/app_name" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/menu_title" android:textColor="@color/olive_dark"
+                android:textSize="34sp" android:textStyle="bold" android:paddingTop="10dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/tagline" android:textColor="@color/olive_mid"
+                android:textSize="17sp" android:paddingBottom="24dp" />
+            <TextView android:id="@+id/voiceStatus" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:minHeight="48dp"
+                android:background="@drawable/bg_soft_card" android:padding="12dp"
+                android:text="@string/voice_starting" android:textColor="@color/olive_dark"
+                android:textSize="16sp" android:accessibilityLiveRegion="none" />
+            <Button android:id="@+id/microphoneToggle" style="@style/PerceptionButton.Secondary"
+                android:layout_width="match_parent" android:layout_height="56dp"
+                android:layout_marginTop="8dp" android:text="@string/mic_on" />
+            <CheckBox android:id="@+id/speechToggle" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:minHeight="48dp"
+                android:checked="true" android:text="@string/enable_speech"
+                android:textColor="@color/olive_dark" />
+            <TextView android:id="@+id/menuSpeechStatus" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/starting_speech"
+                android:textColor="@color/olive_mid" android:textSize="13sp"
+                android:accessibilityLiveRegion="polite" android:paddingBottom="16dp" />
+            <Button android:id="@+id/startAssistance" style="@style/PerceptionButton.Primary"
+                android:layout_width="match_parent" android:layout_height="64dp"
+                android:text="@string/start_assistance" />
+            <CheckBox android:id="@+id/depthOption" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:minHeight="48dp"
+                android:text="@string/start_depth_assistance" android:textColor="@color/olive_mid"
+                android:textSize="13sp" />
+            <Button android:id="@+id/openNavigation" style="@style/PerceptionButton.Secondary"
+                android:layout_width="match_parent" android:layout_height="64dp"
+                android:layout_marginTop="16dp" android:text="@string/navigate" />
+            <LinearLayout android:id="@+id/navigationMenu" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical"
+                android:visibility="gone" android:paddingTop="20dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/map_navigation_title" android:textColor="@color/olive_dark"
+                    android:textSize="22sp" android:textStyle="bold" />
+                <TextView android:id="@+id/currentLocationStatus" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:text="@string/location_waiting"
+                    android:textColor="@color/olive_mid" android:accessibilityLiveRegion="polite"
+                    android:paddingVertical="12dp" />
+                <Button android:id="@+id/retryLocation" style="@style/PerceptionButton.Secondary"
+                    android:layout_width="match_parent" android:layout_height="52dp"
+                    android:text="@string/retry_location" />
+                <EditText android:id="@+id/destinationInput" android:layout_width="match_parent"
+                    android:layout_height="56dp" android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_soft_card" android:paddingHorizontal="14dp"
+                    android:hint="@string/destination_hint" android:textColorHint="@color/olive_mid"
+                    android:textColor="@color/olive_dark" android:inputType="textPostalAddress"
+                    android:importantForAutofill="no" android:singleLine="true" />
+                <TextView android:id="@+id/destinationSearchStatus" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:text="@string/destination_search_prompt"
+                    android:textColor="@color/olive_mid" android:accessibilityLiveRegion="polite"
+                    android:paddingVertical="8dp" />
+                <LinearLayout android:id="@+id/destinationSuggestions" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:orientation="vertical" />
+                <FrameLayout android:id="@+id/menuMapHost" android:layout_width="match_parent"
+                    android:layout_height="220dp" android:layout_marginVertical="10dp"
+                    android:background="@color/olive_mid">
+                    <TextView android:id="@+id/menuMapStatus" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_gravity="top"
+                        android:background="#DD34412E" android:padding="8dp"
+                        android:textColor="@color/cream" android:text="@string/map_loading" />
+                </FrameLayout>
+                <Button android:id="@+id/speakDestination" style="@style/PerceptionButton.Secondary"
+                    android:layout_width="match_parent" android:layout_height="56dp"
+                    android:text="@string/speak_destination" />
+                <Button android:id="@+id/previewWalkingRoute" style="@style/PerceptionButton.Primary"
+                    android:layout_width="match_parent" android:layout_height="56dp"
+                    android:layout_marginTop="8dp" android:text="@string/enter_destination" />
+                <Button android:id="@+id/saveHome" style="@style/PerceptionButton.Secondary"
+                    android:layout_width="match_parent" android:layout_height="56dp"
+                    android:layout_marginTop="8dp" android:text="@string/save_home" />
+                <Button android:id="@+id/navigateHome" style="@style/PerceptionButton.Secondary"
+                    android:layout_width="match_parent" android:layout_height="56dp"
+                    android:layout_marginTop="8dp" android:text="@string/navigate_home" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/map_navigation_note" android:textColor="@color/olive_mid"
+                    android:textSize="13sp" android:paddingTop="16dp" />
+            </LinearLayout>
+        </LinearLayout>
     </ScrollView>
-
-    <LinearLayout
-        android:id="@+id/scannerPanel"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-    <!-- App title -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/screen_title"
-        android:textSize="22sp"
-        android:textColor="#FFFFFF"
-        android:padding="16dp" />
-
-    <!-- Camera preview + detection overlay -->
-    <FrameLayout
-        android:id="@+id/cameraArea"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <androidx.camera.view.PreviewView
-            android:id="@+id/preview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:importantForAccessibility="no" />
-
-        <com.example.mobilityassist.OverlayView
-            android:id="@+id/overlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:importantForAccessibility="no" />
-
-        <FrameLayout
-            android:id="@+id/miniMapHost"
-            android:layout_width="160dp"
-            android:layout_height="170dp"
-            android:layout_gravity="top|end"
-            android:layout_margin="8dp"
-            android:background="#202A32"
-            android:visibility="gone">
-            <Button
-                android:id="@+id/expandMap"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_gravity="top"
-                android:text="@string/view_large_map"
-                android:textSize="11sp"
-                android:contentDescription="@string/view_large_map" />
+    <LinearLayout android:id="@+id/scannerPanel" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:orientation="vertical"
+        android:visibility="gone" android:background="@color/olive_dark">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/screen_title" android:textColor="@color/cream"
+            android:textSize="22sp" android:textStyle="bold" android:padding="12dp" />
+        <FrameLayout android:id="@+id/cameraArea" android:layout_width="match_parent"
+            android:layout_height="0dp" android:layout_weight="1" android:background="#182119">
+            <androidx.camera.view.PreviewView android:id="@+id/preview"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:importantForAccessibility="no" />
+            <com.example.mobilityassist.OverlayView android:id="@+id/overlay"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:importantForAccessibility="no" />
+            <Button android:id="@+id/scannerMicrophoneToggle"
+                style="@style/PerceptionButton.Scanner"
+                android:layout_width="90dp" android:layout_height="48dp"
+                android:layout_gravity="top|start" android:layout_margin="8dp"
+                android:text="@string/mic_short_on"
+                android:contentDescription="@string/mic_on" />
+            <FrameLayout android:id="@+id/miniMapHost" android:layout_width="160dp"
+                android:layout_height="170dp" android:layout_gravity="top|end"
+                android:layout_margin="8dp" android:visibility="gone"
+                android:background="@color/olive_mid">
+                <Button android:id="@+id/expandMap" style="@style/PerceptionButton.Secondary"
+                    android:layout_width="match_parent" android:layout_height="48dp"
+                    android:layout_gravity="top" android:text="@string/view_large_map"
+                    android:textSize="11sp" android:contentDescription="@string/view_large_map" />
+            </FrameLayout>
+            <TextView android:id="@+id/diagnostics" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_gravity="bottom|start"
+                android:layout_margin="10dp" android:background="@drawable/bg_translucent_stats"
+                android:padding="8dp" android:textColor="@color/cream"
+                android:textSize="12sp" android:importantForAccessibility="no" />
         </FrameLayout>
-
-    </FrameLayout>
-
-    <FrameLayout
-        android:id="@+id/expandedMapHost"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="#202A32"
-        android:visibility="gone">
-        <Button
-            android:id="@+id/collapseMap"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_gravity="top|end"
-            android:text="@string/back_to_small_map"
-            android:contentDescription="@string/back_to_small_map" />
-    </FrameLayout>
-
-    <TextView
-        android:id="@+id/navigationStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="6dp"
-        android:textColor="#80CBC4"
-        android:textSize="16sp"
-        android:accessibilityLiveRegion="polite"
-        android:visibility="gone" />
-
-    <!-- Primary obstacle warning status (18sp, white, always visible) -->
-    <TextView
-        android:id="@+id/status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/starting_detector"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:padding="12dp" />
-
-    <!-- TTS engine status (amber, accessibility live region) -->
-    <TextView
-        android:id="@+id/speechStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/starting_speech"
-        android:textColor="#FFE082"
-        android:paddingHorizontal="12dp"
-        android:accessibilityLiveRegion="polite" />
-
-    <!-- Phase 3: compact status row — lighting | angle | camera -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="6dp"
-        android:importantForAccessibility="yes">
-
-        <TextView
-            android:id="@+id/lightingStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textSize="12sp"
-            android:textColor="#80CBC4"
-            android:gravity="center"
-            android:text="@string/status_lighting_normal" />
-
-        <TextView
-            android:id="@+id/angleStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textSize="12sp"
-            android:textColor="#B0BEC5"
-            android:gravity="center"
-            android:text="@string/status_angle_unavailable" />
-
-        <TextView
-            android:id="@+id/cameraStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textSize="12sp"
-            android:textColor="#B0BEC5"
-            android:gravity="center"
-            android:text="@string/status_camera_unavailable" />
-
+        <FrameLayout android:id="@+id/expandedMapHost" android:layout_width="match_parent"
+            android:layout_height="0dp" android:layout_weight="1" android:visibility="gone"
+            android:background="@color/olive_mid">
+            <Button android:id="@+id/collapseMap" style="@style/PerceptionButton.Secondary"
+                android:layout_width="wrap_content" android:layout_height="48dp"
+                android:layout_gravity="top|end" android:text="@string/back_to_small_map"
+                android:contentDescription="@string/back_to_small_map" />
+        </FrameLayout>
+        <TextView android:id="@+id/navigationStatus" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:paddingHorizontal="12dp"
+            android:paddingVertical="5dp" android:textColor="@color/cream"
+            android:textSize="15sp" android:accessibilityLiveRegion="polite"
+            android:visibility="gone" />
+        <TextView android:id="@+id/status" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/starting_detector"
+            android:textColor="@color/cream" android:textSize="18sp" android:padding="10dp" />
+        <TextView android:id="@+id/speechStatus" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/starting_speech"
+            android:textColor="@color/cream" android:paddingHorizontal="12dp"
+            android:accessibilityLiveRegion="polite" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:padding="6dp">
+            <TextView android:id="@+id/lightingStatus" style="@style/ScannerChip"
+                android:text="@string/status_lighting_normal" />
+            <TextView android:id="@+id/angleStatus" style="@style/ScannerChip"
+                android:text="@string/status_angle_unavailable" />
+            <TextView android:id="@+id/cameraStatus" style="@style/ScannerChip"
+                android:text="@string/status_camera_unavailable" />
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/size_note" android:textColor="@color/cream"
+            android:textSize="12sp" android:paddingHorizontal="12dp" android:paddingBottom="6dp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:paddingHorizontal="8dp" android:paddingBottom="8dp">
+            <Button android:id="@+id/toggle" style="@style/PerceptionButton.Scanner"
+                android:layout_width="0dp" android:layout_height="56dp" android:layout_weight="1"
+                android:drawableStart="@drawable/ic_pause_simple" android:drawablePadding="4dp"
+                android:text="@string/pause_assistance" />
+            <Button android:id="@+id/backToMenu" style="@style/PerceptionButton.Scanner"
+                android:layout_width="0dp" android:layout_height="56dp" android:layout_weight="1"
+                android:layout_marginStart="8dp" android:drawableStart="@drawable/ic_menu_simple"
+                android:drawablePadding="4dp" android:text="@string/back_to_menu" />
+        </LinearLayout>
     </LinearLayout>
-
-    <!-- Rolling pipeline diagnostics (hidden from TalkBack) -->
-    <TextView
-        android:id="@+id/diagnostics"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#B0BEC5"
-        android:paddingHorizontal="12dp"
-        android:importantForAccessibility="no" />
-
-    <!-- Safety disclaimer -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/size_note"
-        android:textColor="#FFFFFF"
-        android:padding="12dp" />
-
-    <!-- Pause / resume / retry button -->
-    <Button
-        android:id="@+id/toggle"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:text="@string/pause_assistance" />
-
-    <Button
-        android:id="@+id/backToMenu"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="@string/back_to_menu" />
-
-    </LinearLayout>
+    <FrameLayout android:id="@+id/splashPanel" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:background="@color/olive_dark"
+        android:clickable="true" android:focusable="true">
+        <LinearLayout android:id="@+id/splashContent" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_gravity="center"
+            android:gravity="center" android:orientation="vertical" android:padding="32dp">
+            <ImageView android:layout_width="130dp" android:layout_height="130dp"
+                android:src="@drawable/ic_perception_mark" android:contentDescription="@string/app_name" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="26dp" android:gravity="center"
+                android:text="@string/tagline" android:textColor="#FFFFFF"
+                android:textSize="20sp" android:fontFamily="sans-serif-light" />
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>
