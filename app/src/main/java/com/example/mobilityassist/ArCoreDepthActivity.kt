@@ -70,14 +70,21 @@ class ArCoreDepthActivity : ComponentActivity(), GLSurfaceView.Renderer {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(ContextCompat.getColor(this@ArCoreDepthActivity, R.color.olive_dark))
+        }
         status = TextView(this).apply {
             setText(R.string.depth_starting)
             textSize = 20f
             setPadding(20, 20, 20, 20)
+            setTextColor(ContextCompat.getColor(this@ArCoreDepthActivity, R.color.cream))
             accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
-        speechStatus = TextView(this).apply { setText(R.string.starting_speech) }
+        speechStatus = TextView(this).apply {
+            setText(R.string.starting_speech)
+            setTextColor(ContextCompat.getColor(this@ArCoreDepthActivity, R.color.cream))
+        }
         val frame = FrameLayout(this)
         surface = GLSurfaceView(this).apply {
             setEGLContextClientVersion(2)
@@ -93,10 +100,13 @@ class ArCoreDepthActivity : ComponentActivity(), GLSurfaceView.Renderer {
         root.addView(TextView(this).apply {
             setText(R.string.depth_note)
             setPadding(20, 12, 20, 12)
+            setTextColor(ContextCompat.getColor(this@ArCoreDepthActivity, R.color.cream))
         })
         root.addView(Button(this).apply {
             setText(R.string.back_to_menu)
             minHeight = 60
+            background = ContextCompat.getDrawable(this@ArCoreDepthActivity, R.drawable.bg_primary_button)
+            setTextColor(ContextCompat.getColor(this@ArCoreDepthActivity, R.color.cream))
             setOnClickListener { finish() }
         })
         setContentView(root)

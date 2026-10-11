@@ -37,7 +37,7 @@ Or open the project in Android Studio and Run. On a fresh install, Android asks 
 
 After the Perception splash, the app asks you to say **Start Camera Assistance** or **Enter Destination**. These are also the two large menu buttons. The Camera Assistance button opens the existing scanner; check **Try depth-enhanced assistance** below it first if the phone supports ARCore Depth. **Navigate** expands the existing destination controls without changing what their buttons do.
 
-The eye-and-path mark is a theme-matched vector placeholder. Replace `app/src/main/res/drawable/ic_perception_mark.xml` and `ic_launcher.xml` when the intended SVG is supplied.
+The launcher, menu, and splash use the supplied Perception logo. Its source is `design/perception-logo.svg`; Android displays the rendered `app/src/main/res/drawable-nodpi/perception_logo.png` to preserve the SVG gradients, glow, and lettering.
 
 For voice navigation, say **Enter Destination**, then a place or address. Perception speaks the first Mappls suggestion using its short name and locality. Say **yes** to select it or **no** to hear the next suggestion. When the walking route and current location are ready, the app reads the short destination and estimated time. Say **yes** again to begin camera-plus-map guidance, or **no** to cancel. You can also type and tap through the same flow. A fresh precise location is required; after a weak fix the voice flow waits and resumes when a usable fix arrives.
 
@@ -77,6 +77,7 @@ Use a sighted helper in a controlled, low-risk place; do not test on a live road
 - [ ] Say “microphone off” while the camera is open. Verify the button changes to **Mic off** and voice commands stop. Tap it to restore listening. Background the app and verify listening stops until it is visible again.
 - [ ] Test with no network or no offline recognizer; verify the buttons and typed destination still work. Test with a noisy room and TalkBack enabled.
 - [ ] Check the olive/cream menu, splash animation, preview proportions, separate translucent FPS box, side-by-side pause/menu buttons, and map expand/collapse on the actual phone size.
+- [ ] Verify the supplied Perception logo appears in the phone launcher, splash, and opening menu. Check that every app button, including place suggestions, route confirmation, and optional depth assistance, has an olive background and readable cream text.
 
 - [ ] On fresh install, Camera and precise Location prompts appear. Denying Location leaves camera assistance functional.
 - [ ] With permissions granted and Location enabled, current coordinates and an accuracy estimate appear. Stale or poor fixes prevent route start.

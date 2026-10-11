@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "5.2-voice-access"
+        versionCode = 14
+        versionName = "5.2-branded"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

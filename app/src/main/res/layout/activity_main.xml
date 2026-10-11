@@ -7,8 +7,8 @@
         android:background="@color/cream">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:padding="24dp">
-            <ImageView android:layout_width="72dp" android:layout_height="72dp"
-                android:src="@drawable/ic_perception_mark" android:contentDescription="@string/app_name" />
+            <ImageView android:layout_width="104dp" android:layout_height="104dp"
+                android:src="@drawable/perception_logo" android:contentDescription="@string/app_name" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="@string/menu_title" android:textColor="@color/olive_dark"
                 android:textSize="34sp" android:textStyle="bold" android:paddingTop="10dp" />
@@ -177,8 +177,8 @@
         <LinearLayout android:id="@+id/splashContent" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_gravity="center"
             android:gravity="center" android:orientation="vertical" android:padding="32dp">
-            <ImageView android:layout_width="130dp" android:layout_height="130dp"
-                android:src="@drawable/ic_perception_mark" android:contentDescription="@string/app_name" />
+            <ImageView android:layout_width="196dp" android:layout_height="196dp"
+                android:src="@drawable/perception_logo" android:contentDescription="@string/app_name" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="26dp" android:gravity="center"
                 android:text="@string/tagline" android:textColor="#FFFFFF"

@@ -17,7 +17,7 @@
     </queries>
     <application android:allowBackup="false" android:supportsRtl="false" android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_launcher" android:label="@string/app_name"
+        android:icon="@drawable/perception_logo" android:roundIcon="@drawable/perception_logo" android:label="@string/app_name"
         android:theme="@style/Theme.MobilityAssist">
         <meta-data android:name="com.google.ar.core" android:value="optional" />
         <activity android:name=".ArCoreDepthActivity" android:exported="false" />

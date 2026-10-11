@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1932 1932" width="1932" height="1932">
+  <defs>
+    <linearGradient id="bg" x1="0.3" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#3a4429"/>
+      <stop offset="0.45" stop-color="#27321f"/>
+      <stop offset="1" stop-color="#13200f"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="980" cy="700" r="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8da13f" stop-opacity="0.45"/>
+      <stop offset="0.55" stop-color="#6b7d36" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#6b7d36" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="640" y1="560" x2="1330" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#86a020"/>
+      <stop offset="0.35" stop-color="#a9bd84"/>
+      <stop offset="0.7" stop-color="#bccaa0"/>
+      <stop offset="1" stop-color="#86a020"/>
+    </linearGradient>
+    <linearGradient id="ringShade" x1="1000" y1="760" x2="1200" y2="1020" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a6a10" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3a5008" stop-opacity="0.9"/>
+    </linearGradient>
+    <radialGradient id="eyeball" cx="950" cy="900" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#faf3e2"/>
+      <stop offset="0.7" stop-color="#f8f0de"/>
+      <stop offset="1" stop-color="#e2dcc4"/>
+    </radialGradient>
+    <linearGradient id="lidShadow" x1="0" y1="440" x2="0" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b4208" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#6b6a38" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8a8660" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="stem" x1="625" y1="0" x2="811" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8efdc"/>
+      <stop offset="1" stop-color="#f9f2e1"/>
+    </linearGradient>
+    <linearGradient id="stemShade" x1="660" y1="800" x2="800" y2="1070" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f0d9b8" stop-opacity="0.9"/>
+      <stop offset="0.5" stop-color="#b9a688" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#b9a688" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="blur30" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+    <filter id="blur12" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+    <filter id="blur6" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <clipPath id="eyeClip">
+      <circle cx="950" cy="735" r="302"/>
+    </clipPath>
+    <clipPath id="ringClip">
+      <circle cx="980" cy="665" r="355"/>
+    </clipPath>
+    <clipPath id="stemClip">
+      <path d="M625 665 H811 V1085 Q811 1150 780 1168 Q765 1176 700 1190 Q668 1196 646 1182 Q625 1168 625 1128 Z"/>
+    </clipPath>
+    <clipPath id="frame">
+      <path d="M0 430 C0 160 160 0 430 0 H1502 C1772 0 1932 160 1932 430 V1502 C1932 1772 1772 1932 1502 1932 H430 C160 1932 0 1772 0 1502 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <g clip-path="url(#frame)">
+    <rect width="1932" height="1932" fill="url(#bg)"/>
+    <rect width="1932" height="1932" fill="url(#halo)"/>
+  </g>
+
+  <!-- Glow behind the P -->
+  <g filter="url(#blur30)" opacity="0.55">
+    <circle cx="980" cy="665" r="360" fill="#9bb050"/>
+    <rect x="625" y="700" width="186" height="490" rx="40" fill="#e8dfb8"/>
+  </g>
+
+  <!-- Stem of the P -->
+  <path d="M625 665 H811 V1085 Q811 1150 780 1168 Q765 1176 700 1190 Q668 1196 646 1182 Q625 1168 625 1128 Z" fill="url(#stem)"/>
+  <g clip-path="url(#stemClip)">
+    <path d="M625 780 Q660 960 811 1070 V680 H625 Z" fill="url(#stemShade)" filter="url(#blur12)"/>
+  </g>
+
+  <!-- Green outer ring -->
+  <circle cx="980" cy="665" r="355" fill="url(#ring)"/>
+  <g clip-path="url(#ringClip)">
+    <ellipse cx="1180" cy="930" rx="240" ry="150" transform="rotate(-35 1180 930)" fill="url(#ringShade)" filter="url(#blur12)"/>
+  </g>
+
+  <!-- Eyeball -->
+  <circle cx="950" cy="735" r="302" fill="url(#eyeball)"/>
+  <!-- thin light rim -->
+  <circle cx="950" cy="735" r="302" fill="none" stroke="#f1f4d6" stroke-opacity="0.8" stroke-width="5"/>
+
+  <!-- Upper-lid shadow -->
+  <g clip-path="url(#eyeClip)">
+    <ellipse cx="960" cy="470" rx="360" ry="165" fill="url(#lidShadow)" filter="url(#blur12)"/>
+    <ellipse cx="950" cy="440" rx="330" ry="40" fill="#2f3a05" opacity="0.85" filter="url(#blur6)"/>
+  </g>
+
+  <!-- Pupil -->
+  <circle cx="979" cy="666" r="177" fill="#152716"/>
+  <circle cx="979" cy="675" r="17" fill="#faf3e2"/>
+
+  <!-- Wordmark -->
+  <text x="305" y="1655" font-family="Poppins, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="236" fill="#f8f0de" textLength="1322" lengthAdjust="spacingAndGlyphs">Perception</text>
+</svg>

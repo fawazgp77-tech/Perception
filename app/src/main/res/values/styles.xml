@@ -4,6 +4,7 @@
         <item name="android:windowBackground">@color/olive_dark</item>
         <item name="android:colorAccent">@color/olive_mid</item>
         <item name="android:fontFamily">sans</item>
+        <item name="android:buttonStyle">@style/PerceptionButton.Primary</item>
     </style>
     <style name="PerceptionButton" parent="android:style/Widget.Material.Button">
         <item name="android:textAllCaps">false</item>
@@ -11,7 +12,7 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:minHeight">48dp</item>
         <item name="android:background">@drawable/bg_secondary_button</item>
-        <item name="android:textColor">@color/olive_dark</item>
+        <item name="android:textColor">@color/cream</item>
     </style>
     <style name="PerceptionButton.Primary">
         <item name="android:background">@drawable/bg_primary_button</item>

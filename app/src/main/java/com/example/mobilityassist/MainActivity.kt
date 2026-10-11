@@ -701,6 +701,8 @@ class MainActivity : ComponentActivity() {
                                 setText(candidate.label)
                                 isAllCaps = false
                                 minHeight = (56 * resources.displayMetrics.density).toInt()
+                                background = ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_primary_button)
+                                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.cream))
                                 contentDescription = candidate.label
                                 setOnClickListener { selectDestination(candidate) }
                             }
@@ -896,7 +898,15 @@ class MainActivity : ComponentActivity() {
                 confirmRouteByVoice = null
                 startRoute()
             }
-            .show()
+            .show().also { dialog ->
+                listOf(AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_POSITIVE).forEach { which ->
+                    dialog.getButton(which)?.apply {
+                        background = ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_primary_button)
+                        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.cream))
+                        isAllCaps = false
+                    }
+                }
+            }
     }
 
     private fun startNavigation(route: WalkingRoute) {
