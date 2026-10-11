@@ -46,10 +46,12 @@ class MapFailure(val kind: MapFailureKind, val stage: String, val code: Int = 0)
             val kind = when {
                 code == 4 || "not provisioned" in lower -> MapFailureKind.SERVICE
                 code == 403 || "quota" in lower || "limit" in lower -> MapFailureKind.QUOTA
-                code == 401 || code in 1..6 || "auth" in lower || "invalid config" in lower -> MapFailureKind.ACCESS
+                code == 401 || code in 1..3 || code in 5..8 ||
+                    "auth" in lower || "invalid config" in lower -> MapFailureKind.ACCESS
                 code == 204 || "no result" in lower ->
                     if (stage == "route") MapFailureKind.NO_ROUTE else MapFailureKind.NO_RESULTS
-                code == 408 || "timeout" in lower || "network" in lower || "connect" in lower -> MapFailureKind.NETWORK
+                code == 10 || code == 408 || "timeout" in lower || "network" in lower ||
+                    "connect" in lower -> MapFailureKind.NETWORK
                 else -> MapFailureKind.OTHER
             }
             return MapFailure(kind, stage, code)

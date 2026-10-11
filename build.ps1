@@ -9,16 +9,6 @@ $localJdk = Get-ChildItem -LiteralPath (Join-Path $projectRoot '.toolchain/jdk')
     Where-Object { Test-Path (Join-Path $_.FullName 'bin/java.exe') } | Select-Object -First 1
 if ($localJdk) { $env:JAVA_HOME = $localJdk.FullName }
 
-if ($localJdk) {
-    $localDebugKey = Join-Path $projectRoot '.toolchain/debug.keystore'
-    if (-not (Test-Path $localDebugKey)) {
-        & (Join-Path $localJdk.FullName 'bin/keytool.exe') -genkeypair -v -keystore $localDebugKey `
-            -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 `
-            -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
-        if ($LASTEXITCODE -ne 0) { throw 'Could not create local debug keystore' }
-    }
-}
-
 $localSdk = Join-Path $projectRoot '.toolchain/sdk'
 if (Test-Path (Join-Path $localSdk 'platforms/android-35/android.jar')) { $env:ANDROID_HOME = $localSdk }
 

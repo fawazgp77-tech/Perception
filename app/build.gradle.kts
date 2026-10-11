@@ -11,18 +11,12 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "5.1-map-wall-recovery"
+        versionCode = 10
+        versionName = "5.1-mappls-diagnostics"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    signingConfigs {
-        getByName("debug") {
-            val localDebugKey = rootProject.file(".toolchain/debug.keystore")
-            if (localDebugKey.exists()) storeFile = localDebugKey
-        }
     }
     kotlinOptions { jvmTarget = "17" }
     androidResources { noCompress += "tflite" }

@@ -278,12 +278,14 @@ class MainActivity : ComponentActivity() {
                 onReady = { menuMapStatus.setText(R.string.map_ready) },
                 onError = { code ->
                     Log.w("MobilityAssist", "Mappls map error code $code")
-                    menuMapStatus.setText(when (code) {
+                    val resource = when (code) {
                         4 -> R.string.map_service_failed
                         403 -> R.string.map_quota_failed
                         401, 1, 2, 3, 5, 6 -> R.string.map_access_failed
                         else -> R.string.map_failed
-                    })
+                    }
+                    menuMapStatus.text = getString(R.string.map_error_detail,
+                        getString(resource), "map", code)
                     navigationStatus.setText(R.string.navigation_map_error)
                 })
         } catch (error: Exception) {
@@ -488,7 +490,7 @@ class MainActivity : ComponentActivity() {
     private fun showMapFailure(error: Throwable, target: TextView) {
         val failure = error as? MapFailure
         Log.w("MobilityAssist", "Mappls ${failure?.stage ?: "operation"} failed: ${failure?.kind ?: "unknown"} (${failure?.code ?: 0})")
-        target.setText(when (failure?.kind) {
+        val resource = when (failure?.kind) {
             MapFailureKind.NO_RESULTS -> R.string.destination_no_results
             MapFailureKind.NO_ROUTE -> R.string.route_no_pedestrian
             MapFailureKind.NETWORK -> R.string.map_network_failed
@@ -496,7 +498,10 @@ class MainActivity : ComponentActivity() {
             MapFailureKind.QUOTA -> R.string.map_quota_failed
             MapFailureKind.SERVICE -> R.string.map_service_failed
             else -> R.string.route_failed
-        })
+        }
+        target.text = if (failure != null && failure.code != 0)
+            getString(R.string.map_error_detail, getString(resource), failure.stage, failure.code)
+        else getString(resource)
     }
 
     private fun confirmWalkingRoute() {

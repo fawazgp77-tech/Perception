@@ -12,6 +12,18 @@ Mappls uses the two license/config files supplied for this project. In the [Mapp
 
 The same Mappls app must also have map tiles, Autosuggest, Place Details, reverse geocoding, and pedestrian routing provisioned. A successful Gradle build does not prove that the installed APK can use those services.
 
+### Verify Mappls authorization
+
+The debug APK uses Android's standard debug keystore for the computer that builds it. Both `build.ps1` and Android Studio now use that same signing choice. To view this computer's SHA-256 fingerprint, run:
+
+```powershell
+& "$env:JAVA_HOME\bin\keytool.exe" -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android | Select-String 'SHA256:'
+```
+
+In the Mappls Console, select the **Android app** whose app ID matches the prefix of the two `.a.conf`/`.a.olf` files. Check package name `com.example.mobilityassist` and that exact signing fingerprint. A different computer or a release APK has a different fingerprint. Confirm that the app has access to Map SDK/vector maps, Autosuggest, Place Details, Reverse Geocoding, and Directions/walking routing. Mappls SDK code **4** means “Method not Provisioned”; the app displays the operation (`map`, `suggest`, `place`, or `route`) and code beside the error. Code **10** is a connection/DNS failure; codes **1–3, 5–8** indicate configuration or authentication problems. See the [official Mappls SDK error reference](https://developer.mappls.com/documentation/sdk/android/docs/v2.0.0/SDK-Error-code/).
+
+After any Console change, download a fresh matching file pair into `app/`, remove any obsolete pair with a different app ID, and build with `.\build.ps1 clean assembleDebug`. Reinstall the new APK. Do not paste the license files, private keys, or tokens into an issue or chat. A blank usage chart does not prove the app never attempted a call: SDK code 4 can reject a method before an HTTP request is counted.
+
 Build:
 
 ```powershell
