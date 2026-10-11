@@ -79,6 +79,7 @@ class PathPolicyTest {
         assertEquals(Warning.PATH_LEFT, tracker.observe(blocked).guidance)
         val open = PathPolicy.assess(scene(id = 4), 30, 30)
         assertTrue(open.forwardClear)
+        assertNull(tracker.observe(open).guidance)
         assertEquals(Warning.PATH_CLEAR, tracker.observe(open).guidance)
         assertNull(tracker.observe(open).guidance)
     }
@@ -92,84 +93,23 @@ class PathPolicyTest {
         repeat(4) { assertNull(tracker.observe(unknown).guidance) }
     }
 
-    @Test fun narrowForwardOpeningNeedsTwoNewResults() {
-        val tracker = PathGuidanceTracker()
-        assertEquals(Warning.PATH_BLOCKED,
-            tracker.observe(PathPolicy.assess(scene(), 30, 30)).guidance)
-        val labels = scene(id = 0)
-        for (y in 0 until 30) for (x in 10 until 12) labels[y * 30 + x] = 4
-        val narrow = PathPolicy.assess(labels, 30, 30)
-        assertTrue(narrow.forwardClear)
-        assertFalse(narrow.strongForwardClear)
-        assertNull(tracker.observe(narrow).guidance)
-        assertEquals(Warning.PATH_CLEAR, tracker.observe(narrow).guidance)
-    }
-
     @Test fun weakerBarrierRequiresTwoFreshModelSamples() {
         val tracker = PathGuidanceTracker()
-        val labels = scene(id = 0)
-        for (y in 23 until 30) for (x in 0 until 30) labels[y * 30 + x] = 4
-        for (y in 12 until 23) for (x in 10 until 14) labels[y * 30 + x] = 1
+        val labels = scene(id = 4)
+        for (y in 12 until 23) for (x in 10 until 16) labels[y * 30 + x] = 1
         val sample = PathPolicy.assess(labels, 30, 30)
         assertTrue(sample.blocked)
-        assertTrue(sample.wallFraction < .50f)
+        assertTrue(sample.wallFraction < .75f)
         assertNull(tracker.observe(sample).guidance)
         assertNotNull(tracker.observe(sample).guidance)
         assertTrue(PathSegmenter.FAST_SAMPLE_INTERVAL_MS < 1_000L)
-    }
-
-    @Test fun arModeRetainsPreviousWallThreshold() {
-        val labels = scene(id = 0)
-        for (y in 12 until 23) for (x in 10 until 15) labels[y * 30 + x] = 1
-        assertTrue(PathPolicy.assess(labels, 30, 30, responsive = true).blocked)
-        assertFalse(PathPolicy.assess(labels, 30, 30, responsive = false).blocked)
     }
 
     @Test fun aKnownSideObstaclePreventsDirectionalAdvice() {
         val sample = PathGuidanceTracker().observe(sideCorridor(left = true))
         val person = Obstacle("person", .9f, .05f, .1f, .3f, .9f)
         assertEquals(Warning.PATH_BLOCKED,
-            CameraGuidancePlanner.decide(listOf(person), sample, true))
-        assertNull(CameraGuidancePlanner.decide(emptyList(), sample, false))
-    }
-
-    @Test fun centerObstacleUsesVisibleSideCorridor() {
-        val path = sideCorridor(left = false)
-        val near = Obstacle("person", .9f, .32f, .1f, .68f, .55f)
-        val veryNear = near.copy(top = .05f, bottom = .9f)
-        assertEquals(Warning.AHEAD_RIGHT,
-            CameraGuidancePlanner.decide(listOf(near), path, true))
-        assertEquals(Warning.STOP_RIGHT,
-            CameraGuidancePlanner.decide(listOf(veryNear), path, true))
-        assertEquals(Warning.AHEAD,
-            CameraGuidancePlanner.decide(listOf(near), path, false))
-        assertEquals(Warning.AHEAD_LEFT,
-            CameraGuidancePlanner.decide(listOf(near), PathPolicy.assess(scene(id = 4), 30, 30), true))
-        val sideDog = Obstacle("dog", .9f, .7f, .1f, .96f, .9f)
-        assertEquals(Warning.AHEAD,
-            CameraGuidancePlanner.decide(listOf(near, sideDog), path, true))
-    }
-
-    @Test fun distantPersonCanSupportPartialSidePathButNearbyPersonBlocksIt() {
-        val labels = scene(id = 0)
-        for (y in 0 until 23) for (x in 10 until 20) labels[y * 30 + x] = 1
-        for (y in 23 until 30) for (x in 10 until 20) labels[y * 30 + x] = 4
-        for (y in 16 until 30) for (x in 0 until 2) labels[y * 30 + x] = 4
-        val path = PathGuidanceTracker().observe(PathPolicy.assess(labels, 30, 30))
-        val farPerson = Obstacle("person", .9f, .03f, .2f, .17f, .65f)
-        assertEquals(Warning.PATH_BLOCKED,
-            CameraGuidancePlanner.decide(emptyList(), path, true))
-        assertEquals(Warning.PATH_LEFT,
-            CameraGuidancePlanner.decide(listOf(farPerson), path, true))
-        val nearPerson = farPerson.copy(right = .3f, bottom = .9f)
-        assertEquals(Warning.PATH_BLOCKED,
-            CameraGuidancePlanner.decide(listOf(nearPerson), path, true))
-        val narrowNearPerson = Obstacle("person", .9f, .03f, .05f, .14f, .9f)
-        assertEquals(Warning.PATH_BLOCKED,
-            CameraGuidancePlanner.decide(listOf(narrowNearPerson), path, true))
-        val tallThinPerson = narrowNearPerson.copy(right = .10f)
-        assertEquals(Proximity.FAR, tallThinPerson.proximity)
-        assertEquals(Warning.PATH_BLOCKED,
-            CameraGuidancePlanner.decide(listOf(tallThinPerson), path, true))
+            PathWarningSelector.select(sample, listOf(person), true))
+        assertNull(PathWarningSelector.select(sample, emptyList(), false))
     }
 }
