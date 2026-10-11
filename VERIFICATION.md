@@ -126,3 +126,13 @@ Untouched files (Phase 3 policy): `DecisionEngine.kt`, `ObjectDetectorHelper.kt`
 | Formal demo sign-off | 3 | P0 | Blocked on all above |
 
 **No phase has been formally demo-approved.** Physical device testing and a dated test record are required before any supervised demo may be authorised.
+
+---
+
+## v5.1 camera + in-app Mappls walking navigation (2026-10-11)
+
+The v5.2 camera change was reverted to the v5.1 guidance implementation before adding navigation. The Mappls Gradle plugin parsed the locally supplied `.a.conf` and `.a.olf` files. The navigation build uses Mappls SDK 9.0.3 for the in-app map and its walking routing/search services. The license files and generated asset are ignored by Git and are not part of the public source commit.
+
+Automated verification: `testDebugUnitTest assembleDebug lintDebug` passed with **93 JVM tests, 0 failures**, an assembled debug APK, and **0 lint errors**. The lint report has advisory warnings from existing dependencies and logging style. The final APK is at `app/build/outputs/apk/debug/app-debug.apk`.
+
+Runtime verification remains **pending**. No Android device was connected when `adb devices` was checked. The current Mappls license's package/signature match and API entitlements, GPS accuracy, route lookup, map attribution, turn timing, simultaneous camera/map performance, and speech priority must be checked on the intended phone. The short procedure is in `README.md` under “Phone test checklist.” A pedestrian route does not certify safe crossings, and the camera model cannot detect all hazards.

@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.mappls.services.android")
 }
 android {
     namespace = "com.example.mobilityassist"
@@ -10,8 +11,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "5.1-demo"
+        versionCode = 8
+        versionName = "5.1-navigation-demo"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -37,5 +38,6 @@ dependencies {
     implementation("com.google.mediapipe:tasks-vision:0.10.21")
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("com.google.ar:core:1.56.0")
+    implementation("com.mappls.sdk:mappls-android-sdk:9.0.3")
     testImplementation("junit:junit:4.13.2")
 }

@@ -6,8 +6,11 @@ import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
@@ -17,6 +20,8 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.CheckBox
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import android.speech.RecognizerIntent
@@ -35,6 +40,8 @@ import androidx.core.content.ContextCompat
 import android.provider.Settings
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.ceil
 
 class MainActivity : ComponentActivity() {
 
@@ -72,6 +79,18 @@ class MainActivity : ComponentActivity() {
     private var lastWarningMs = 0L
     private var pathWarningAnnounced = false // Main thread; enables one recovery announcement.
     private var lastMetricsLogMs = 0L
+    private lateinit var locationTracker: PreciseLocationTracker
+    private val routeService = MapplsWalkingRoutes()
+    private var walkingRoute: WalkingRoute? = null
+    private var walkingGuidance: WalkingGuidance? = null
+    private var walkingMap: InAppWalkingMap? = null
+    private var routeRequestId = 0
+    private var rerouting = false
+    private var lastRerouteMs = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private lateinit var miniMapHost: FrameLayout
+    private lateinit var expandedMapHost: FrameLayout
+    private lateinit var navigationStatus: TextView
 
     // -----------------------------------------------------------------------
     // Phase 3 UI views
@@ -119,15 +138,19 @@ class MainActivity : ComponentActivity() {
     // Permission launcher
     // -----------------------------------------------------------------------
     private val permission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        permissionBlocked = !granted &&
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val cameraGranted = grants[Manifest.permission.CAMERA] ?: hasCameraPermission()
+        permissionBlocked = !cameraGranted &&
             !shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
-        if (granted) {
+        if (hasFineLocationPermission()) locationTracker.start()
+        else findViewById<TextView>(R.id.currentLocationStatus)
+            .setText(R.string.location_permission_required)
+        if (cameraGranted) {
             status.setText(R.string.scanning)
             updateButton()
-            preview.post { bindCamera() }
-        } else {
+            if (scanningEnabled) preview.post { bindCamera() }
+        } else if (scanningEnabled) {
             showPermissionState()
         }
     }
@@ -166,6 +189,10 @@ class MainActivity : ComponentActivity() {
         lightingStatus = findViewById(R.id.lightingStatus)
         angleStatus    = findViewById(R.id.angleStatus)
         cameraStatus   = findViewById(R.id.cameraStatus)
+        miniMapHost = findViewById(R.id.miniMapHost)
+        expandedMapHost = findViewById(R.id.expandedMapHost)
+        navigationStatus = findViewById(R.id.navigationStatus)
+        locationTracker = PreciseLocationTracker(this) { location -> onLocationFix(location) }
 
         preview.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         preview.scaleType = PreviewView.ScaleType.FILL_CENTER
@@ -190,6 +217,8 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.previewWalkingRoute).setOnClickListener {
             confirmWalkingRoute(destinationInput.text.toString())
         }
+        findViewById<Button>(R.id.expandMap).setOnClickListener { setMapExpanded(true) }
+        findViewById<Button>(R.id.collapseMap).setOnClickListener { setMapExpanded(false) }
         findViewById<Button>(R.id.saveHome).setOnClickListener {
             val home = destinationInput.text.toString().trim()
             if (home.isBlank()) Toast.makeText(this, R.string.destination_missing, Toast.LENGTH_SHORT).show()
@@ -239,7 +268,7 @@ class MainActivity : ComponentActivity() {
                 failed -> recreate()
                 !hasCameraPermission() -> {
                     if (permissionBlocked) openAppSettings()
-                    else permission.launch(Manifest.permission.CAMERA)
+                    else requestPermissions()
                 }
                 else -> {
                     paused = !paused
@@ -281,7 +310,7 @@ class MainActivity : ComponentActivity() {
                         if (paused) status.setText(R.string.assistance_paused)
                         if (scanningEnabled) {
                             if (hasCameraPermission()) preview.post { bindCamera() }
-                            else permission.launch(Manifest.permission.CAMERA)
+                            else requestPermissions()
                         }
                     }
                 }
@@ -289,6 +318,8 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { fail(getString(R.string.detector_unavailable), error) }
             }
         }
+        if (!hasCameraPermission() || !hasFineLocationPermission()) requestPermissions()
+        else locationTracker.start()
     }
 
     private fun showScanner() {
@@ -300,11 +331,12 @@ class MainActivity : ComponentActivity() {
         updateButton()
         if (initialized) {
             if (hasCameraPermission()) preview.post { bindCamera() }
-            else permission.launch(Manifest.permission.CAMERA)
+            else requestPermissions()
         }
     }
 
     private fun showMenu() {
+        stopNavigation()
         scanningEnabled = false
         angleSuitable = false
         generation.incrementAndGet()
@@ -340,26 +372,201 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, R.string.destination_missing, Toast.LENGTH_SHORT).show()
             return
         }
-        feedback.speak(getString(R.string.route_confirmation, destination),
-            SpeechPriority.IMPORTANT, "route_destination", 0L)
-        AlertDialog.Builder(this)
-            .setTitle(R.string.preview_walking_route)
-            .setMessage(getString(R.string.route_confirmation, destination))
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.open_maps) { _, _ ->
-                // Maps displays walking ETA and asks for its own final Start action.
-                val uri = Uri.parse(WalkingRouteUrl.forDestination(destination))
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps"))
-                } catch (_: ActivityNotFoundException) {
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, uri))
-                    } catch (_: ActivityNotFoundException) {
-                        Toast.makeText(this, R.string.maps_unavailable, Toast.LENGTH_LONG).show()
+        if (!hasFineLocationPermission() || !hasCameraPermission()) {
+            requestPermissions()
+            Toast.makeText(this, R.string.location_permission_required, Toast.LENGTH_LONG).show()
+            return
+        }
+        val origin = locationTracker.latest
+        if (!PreciseLocationTracker.usable(origin)) {
+            Toast.makeText(this, R.string.location_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+        val requestId = ++routeRequestId
+        val routeButton = findViewById<Button>(R.id.previewWalkingRoute)
+        routeButton.isEnabled = false
+        findViewById<TextView>(R.id.currentLocationStatus).setText(R.string.route_loading)
+        mainHandler.postDelayed({
+            if (!destroyed && routeRequestId == requestId && !routeButton.isEnabled) {
+                routeRequestId++
+                routeButton.isEnabled = true
+                Toast.makeText(this, R.string.route_failed, Toast.LENGTH_LONG).show()
+            }
+        }, 20_000L)
+        routeService.find(destination, origin!!) { result ->
+            runOnUiThread {
+                if (destroyed || requestId != routeRequestId) return@runOnUiThread
+                routeButton.isEnabled = true
+                onLocationFix(locationTracker.latest ?: origin)
+                result.onSuccess { route ->
+                    val completed = AtomicBoolean(false)
+                    mainHandler.postDelayed({
+                        if (completed.compareAndSet(false, true) && !destroyed && requestId == routeRequestId)
+                            showRouteConfirmation(origin, null, route, destination)
+                    }, 4_000L)
+                    routeService.describeOrigin(origin) { address ->
+                        runOnUiThread {
+                            if (completed.compareAndSet(false, true) && !destroyed && requestId == routeRequestId)
+                                showRouteConfirmation(origin, address, route, destination)
+                        }
                     }
+                }.onFailure { error ->
+                    Log.w("MobilityAssist", "Walking route unavailable", error)
+                    Toast.makeText(this, R.string.route_failed, Toast.LENGTH_LONG).show()
                 }
             }
+        }
+    }
+
+    private fun showRouteConfirmation(origin: Location, originAddress: String?,
+                                      route: WalkingRoute, query: String) {
+        val originText = originAddress?.takeIf { it.isNotBlank() }
+            ?: "${"%.5f".format(origin.latitude)}, ${"%.5f".format(origin.longitude)}"
+        val minutes = ceil((route.route.duration() ?: 0.0) / 60.0).toInt().coerceAtLeast(1)
+        val km = (route.route.distance() ?: 0.0) / 1000.0
+        val message = getString(R.string.route_confirm_details, originText, origin.accuracy,
+            route.destinationName, minutes, km)
+        feedback.speak(message.replace("\n", ". "), SpeechPriority.IMPORTANT,
+            "route_confirmation", 0L)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.route_confirm_title)
+            .setMessage(message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.start_navigation) { _, _ ->
+                val latest = locationTracker.latest
+                val moved = latest == null || !PreciseLocationTracker.usable(latest) ||
+                    WalkingGuidance.distanceMeters(
+                        GeoPosition(origin.latitude, origin.longitude),
+                        GeoPosition(latest.latitude, latest.longitude)) > 35.0
+                if (moved) {
+                    Toast.makeText(this, R.string.location_unavailable, Toast.LENGTH_LONG).show()
+                    confirmWalkingRoute(query)
+                } else startNavigation(route)
+            }
             .show()
+    }
+
+    private fun startNavigation(route: WalkingRoute) {
+        walkingRoute = route
+        walkingGuidance = guidanceFor(route)
+        rerouting = false
+        showScanner()
+        navigationStatus.visibility = View.VISIBLE
+        navigationStatus.text = getString(R.string.navigation_active, route.destinationName)
+        miniMapHost.visibility = View.VISIBLE
+        expandedMapHost.visibility = View.GONE
+        try {
+            walkingMap?.destroy()
+            walkingMap = InAppWalkingMap(this, miniMapHost, expandedMapHost) { message ->
+                Log.w("MobilityAssist", message)
+                navigationStatus.setText(R.string.navigation_map_error)
+            }.also { map ->
+                map.setRoute(route)
+                if (active) { map.onStart(); map.onResume() }
+                locationTracker.latest?.let(map::updatePosition)
+            }
+        } catch (error: Exception) {
+            Log.e("MobilityAssist", "Map could not start", error)
+            navigationStatus.setText(R.string.navigation_map_error)
+            miniMapHost.visibility = View.GONE
+        }
+        feedback.speak("Walking route started. Camera warnings take priority.",
+            SpeechPriority.IMPORTANT, "route_started", 0L)
+    }
+
+    private fun guidanceFor(value: WalkingRoute): WalkingGuidance {
+        val shape = value.route.getCoordinates().map { GeoPosition(it.latitude(), it.longitude()) }
+        val turns = value.route.legs().orEmpty().flatMap { it.steps().orEmpty() }.mapNotNull { step ->
+            val maneuver = step.maneuver() ?: return@mapNotNull null
+            if (maneuver.type() == "depart" || maneuver.type() == "arrive") return@mapNotNull null
+            val modifier = maneuver.modifier()?.lowercase().orEmpty()
+            val instruction = when {
+                modifier.contains("slight left") -> "Bear left"
+                modifier.contains("slight right") -> "Bear right"
+                modifier.contains("left") -> "Turn left"
+                modifier.contains("right") -> "Turn right"
+                modifier.contains("straight") -> "Continue straight"
+                modifier.contains("uturn") || modifier.contains("u-turn") -> "Turn around"
+                else -> null
+            } ?: return@mapNotNull null
+            val point = maneuver.location() ?: return@mapNotNull null
+            RouteTurn(GeoPosition(point.latitude(), point.longitude()), instruction)
+        }
+        return WalkingGuidance(shape, turns,
+            GeoPosition(value.destination.latitude(), value.destination.longitude()))
+    }
+
+    private fun onLocationFix(location: Location) {
+        val locationText = if (PreciseLocationTracker.usable(location, 100f))
+            getString(R.string.location_accuracy, location.latitude, location.longitude, location.accuracy)
+        else getString(R.string.location_waiting)
+        findViewById<TextView>(R.id.currentLocationStatus).text = locationText
+        if (walkingRoute == null || !scanningEnabled) return
+        walkingMap?.updatePosition(location)
+        if (paused || failed || !hasCameraPermission()) return
+        if (!PreciseLocationTracker.usable(location, 25f)) {
+            navigationStatus.setText(R.string.navigation_location_uncertain)
+            feedback.speak(getString(R.string.navigation_location_uncertain),
+                SpeechPriority.IMPORTANT, "location_uncertain", 30_000L)
+            return
+        }
+        val cue = walkingGuidance?.update(
+            GeoPosition(location.latitude, location.longitude), location.accuracy) ?: return
+        if (navigationStatus.text.toString() != cue.text) navigationStatus.text = cue.text
+        if (cue.key == "reroute") rerouteFrom(location)
+        if (feedback.speak(cue.text, SpeechPriority.IMPORTANT, "map_${cue.key}", 20_000L)) {
+            walkingGuidance?.markSpoken(cue)
+        }
+    }
+
+    private fun rerouteFrom(location: Location) {
+        val route = walkingRoute ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (rerouting || now - lastRerouteMs < 30_000L) return
+        rerouting = true
+        lastRerouteMs = now
+        val requestId = routeRequestId
+        routeService.routeFrom(location, route.destination, route.destinationName) { result ->
+            runOnUiThread {
+                if (destroyed || requestId != routeRequestId || walkingRoute == null) return@runOnUiThread
+                rerouting = false
+                result.onSuccess { updated ->
+                    walkingRoute = updated
+                    walkingGuidance = guidanceFor(updated)
+                    walkingMap?.setRoute(updated)
+                    navigationStatus.setText(R.string.navigation_route_updated)
+                }.onFailure { error ->
+                    Log.w("MobilityAssist", "Rerouting failed", error)
+                    navigationStatus.setText(R.string.route_failed)
+                }
+            }
+        }
+    }
+
+    private fun setMapExpanded(expanded: Boolean) {
+        if (walkingMap == null) return
+        if (expanded) {
+            expandedMapHost.visibility = View.VISIBLE
+            walkingMap?.setExpanded(true)
+            miniMapHost.visibility = View.GONE
+        } else {
+            miniMapHost.visibility = View.VISIBLE
+            walkingMap?.setExpanded(false)
+            expandedMapHost.visibility = View.GONE
+        }
+        if (active && scanningEnabled && !paused) preview.post { bindCamera() }
+    }
+
+    private fun stopNavigation() {
+        routeRequestId++
+        walkingRoute = null
+        walkingGuidance = null
+        rerouting = false
+        walkingMap?.destroy()
+        walkingMap = null
+        miniMapHost.visibility = View.GONE
+        expandedMapHost.visibility = View.GONE
+        navigationStatus.visibility = View.GONE
     }
 
     // -----------------------------------------------------------------------
@@ -809,6 +1016,20 @@ class MainActivity : ComponentActivity() {
         ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
 
+    private fun hasFineLocationPermission() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun requestPermissions() {
+        val missing = mutableListOf<String>()
+        if (!hasCameraPermission()) missing += Manifest.permission.CAMERA
+        if (!hasFineLocationPermission()) {
+            missing += Manifest.permission.ACCESS_FINE_LOCATION
+            missing += Manifest.permission.ACCESS_COARSE_LOCATION
+        }
+        if (missing.isNotEmpty()) permission.launch(missing.toTypedArray())
+    }
+
     private fun showPermissionState() {
         status.setText(if (permissionBlocked) R.string.permission_blocked else R.string.permission_denied)
         updateButton()
@@ -826,6 +1047,7 @@ class MainActivity : ComponentActivity() {
         Log.e("MobilityAssist", message, error)
         if (destroyed) return
         failed = true
+        stopNavigation()
         generation.incrementAndGet()
         analysis?.clearAnalyzer()
         safeTorchOff()
@@ -859,6 +1081,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         active = true
+        locationTracker.start()
+        walkingMap?.onStart()
         if (initialized && hasCameraPermission()) {
             permissionBlocked = false
             updateButton()
@@ -868,6 +1092,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!hasCameraPermission() && walkingRoute != null) stopNavigation()
+        walkingMap?.onResume()
         if (initialized && !hasCameraPermission()) showPermissionState()
         // Update display rotation so angle sensor remapping stays correct
         angleDetector.updateDisplayRotation(
@@ -875,8 +1101,15 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    override fun onPause() {
+        walkingMap?.onPause()
+        super.onPause()
+    }
+
     override fun onStop() {
         active = false
+        locationTracker.stop()
+        walkingMap?.onStop()
         angleSuitable = false
         generation.incrementAndGet()
         analysis?.clearAnalyzer()
@@ -896,11 +1129,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("paused", paused)
+        walkingMap?.onSaveInstanceState(outState)
         super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
         destroyed = true
+        stopNavigation()
+        locationTracker.stop()
         analysis?.clearAnalyzer()
         feedback.close()
         // Queued after any in-flight inference; never closes detector mid-call.

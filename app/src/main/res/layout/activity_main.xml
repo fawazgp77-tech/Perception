@@ -59,6 +59,14 @@
             android:textSize="22sp"
             android:paddingTop="24dp" />
 
+        <TextView
+            android:id="@+id/currentLocationStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/location_waiting"
+            android:accessibilityLiveRegion="polite"
+            android:paddingVertical="10dp" />
+
         <EditText
             android:id="@+id/destinationInput"
             android:layout_width="match_parent"
@@ -79,7 +87,7 @@
             android:id="@+id/previewWalkingRoute"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="@string/preview_walking_route" />
+            android:text="@string/enter_destination" />
 
         <Button
             android:id="@+id/saveHome"
@@ -96,7 +104,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/map_handoff_note"
+            android:text="@string/map_navigation_note"
             android:textColor="#FFFFFF"
             android:paddingTop="16dp" />
     </LinearLayout>
@@ -120,6 +128,7 @@
 
     <!-- Camera preview + detection overlay -->
     <FrameLayout
+        android:id="@+id/cameraArea"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
@@ -136,7 +145,52 @@
             android:layout_height="match_parent"
             android:importantForAccessibility="no" />
 
+        <FrameLayout
+            android:id="@+id/miniMapHost"
+            android:layout_width="160dp"
+            android:layout_height="170dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:background="#202A32"
+            android:visibility="gone">
+            <Button
+                android:id="@+id/expandMap"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_gravity="top"
+                android:text="@string/view_large_map"
+                android:textSize="11sp"
+                android:contentDescription="@string/view_large_map" />
+        </FrameLayout>
+
     </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/expandedMapHost"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#202A32"
+        android:visibility="gone">
+        <Button
+            android:id="@+id/collapseMap"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_gravity="top|end"
+            android:text="@string/back_to_small_map"
+            android:contentDescription="@string/back_to_small_map" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/navigationStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:textColor="#80CBC4"
+        android:textSize="16sp"
+        android:accessibilityLiveRegion="polite"
+        android:visibility="gone" />
 
     <!-- Primary obstacle warning status (18sp, white, always visible) -->
     <TextView

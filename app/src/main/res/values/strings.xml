@@ -14,20 +14,32 @@
     <string name="depth_unavailable">ARCore Depth is unavailable on this phone. Use camera assistance.</string>
     <string name="depth_start_failed">Depth could not start. Use camera assistance.</string>
     <string name="map_navigation_title">Walking directions</string>
+    <string name="enter_destination">Enter Destination</string>
+    <string name="location_waiting">Current location: waiting for precise GPS fix</string>
+    <string name="location_permission_required">Precise location is needed for in-app walking directions. Camera assistance still works.</string>
+    <string name="location_unavailable">Location unavailable. Turn on device location and try again outdoors.</string>
+    <string name="location_accuracy">Current location: %1$.5f, %2$.5f (±%3$.0f m)</string>
+    <string name="map_navigation_note">Walking directions need internet and precise location. Camera warnings take priority. Use your usual mobility aid and verify crossings independently.</string>
+    <string name="route_loading">Finding your walking route…</string>
+    <string name="route_failed">Could not find a walking route. Check the address, connection, and Mappls access.</string>
+    <string name="route_confirm_title">Confirm walking route</string>
+    <string name="route_confirm_details">From: %1$s (±%2$.0f m)\nTo: %3$s\nEstimated walk: %4$d minutes, %5$.1f km\n\nStart camera and map guidance?</string>
+    <string name="start_navigation">Start guidance</string>
+    <string name="navigation_active">Walking to %1$s</string>
+    <string name="navigation_route_updated">Walking route updated</string>
+    <string name="navigation_location_uncertain">Location accuracy is low. Check your surroundings; turn guidance is paused.</string>
+    <string name="navigation_map_error">Map unavailable. Camera assistance continues.</string>
+    <string name="view_large_map">Expand map</string>
+    <string name="back_to_small_map">Small map</string>
     <string name="destination_hint">Enter an address or place</string>
     <string name="speak_destination">Speak destination</string>
-    <string name="preview_walking_route">Preview walking route</string>
     <string name="save_home">Save entered address as Home</string>
     <string name="navigate_home">Walking route to Home</string>
     <string name="back_to_menu">Back to menu</string>
-    <string name="map_handoff_note">Google Maps will show the route and estimated time. Review them there before tapping Start. Camera assistance pauses while Maps is open.</string>
     <string name="destination_missing">Enter or speak a destination first.</string>
     <string name="home_missing">Save your Home address first.</string>
     <string name="home_saved">Home address saved on this phone.</string>
     <string name="voice_input_unavailable">Voice input unavailable. Type the address instead.</string>
-    <string name="maps_unavailable">No app can open the walking route.</string>
-    <string name="route_confirmation">Destination: %1$s. Open Google Maps to check the walking route and travel time?</string>
-    <string name="open_maps">Open Google Maps</string>
     <string name="cancel">Cancel</string>
 
     <!-- Existing Phase 1/2 strings — unchanged -->

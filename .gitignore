@@ -11,3 +11,8 @@ model-download.zip
 presentation-build/
 presentation-output/
 releases/phase1/*.apk
+app/*.a.conf
+app/*.a.olf
+app1791711491182i1807861861/
+.mappls-inspect/
+app/src/main/assets/mappls-conf.txt
