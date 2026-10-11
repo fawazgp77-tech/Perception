@@ -32,6 +32,9 @@ enum class Warning(val text: String, val urgent: Boolean = false) {
     AHEAD("Obstacle ahead."),
     POSSIBLE_WALL("Possible wall ahead."),
     PATH_BLOCKED("Path ahead may be blocked."),
+    PATH_LEFT("Path ahead may be blocked. Turn left to check for a way through."),
+    PATH_RIGHT("Path ahead may be blocked. Turn right to check for a way through."),
+    PATH_CLEAR("Path ahead appears open. Continue carefully."),
     OBSTACLE_LEFT("Obstacle on left."),
     OBSTACLE_RIGHT("Obstacle on right."),
     BOTH_SIDES("Obstacles on both sides.")
@@ -52,6 +55,21 @@ class DecisionEngine {
             Region.RIGHT -> Warning.OBSTACLE_RIGHT
             else -> null
         }
+    }
+}
+
+/** A side recommendation requires both a connected ground mask and no known nearby box there. */
+object PathWarningSelector {
+    fun select(path: PathAssessment?, objects: List<Obstacle>, viewReliable: Boolean): Warning? {
+        if (!viewReliable) return null
+        val guidance = path?.guidance ?: return null
+        val side = when (guidance) {
+            Warning.PATH_LEFT -> Region.LEFT
+            Warning.PATH_RIGHT -> Region.RIGHT
+            else -> return guidance
+        }
+        return if (objects.any { it.region == side && it.proximity != Proximity.FAR })
+            Warning.PATH_BLOCKED else guidance
     }
 }
 
@@ -86,17 +104,31 @@ class GuidanceStabilizer(private val requiredFrames: Int = 2, private val maxGap
 class WarningGate(private val cooldownMs: Long = 6_000) {
     private val times = mutableMapOf<Warning, Long>()
     private var lastTime: Long? = null
+    private var lastWarning: Warning? = null
     fun allow(warning: Warning, nowMs: Long): Boolean {
+        val pathBarrier = warning == Warning.PATH_BLOCKED ||
+            warning == Warning.PATH_LEFT || warning == Warning.PATH_RIGHT
+        val newBlockAfterRecovery = lastWarning == Warning.PATH_CLEAR &&
+            pathBarrier &&
+            lastTime?.let { nowMs - it >= 2_000L } == true
         val perWarningCooldown = when (warning) {
             Warning.STOP -> 4_000L
-            Warning.POSSIBLE_WALL, Warning.PATH_BLOCKED -> 15_000L
+            Warning.POSSIBLE_WALL, Warning.PATH_BLOCKED, Warning.PATH_LEFT,
+            Warning.PATH_RIGHT, Warning.PATH_CLEAR -> 15_000L
             else -> cooldownMs
         }
-        if (times[warning]?.let { nowMs - it < perWarningCooldown } == true) return false
-        if (!warning.urgent && lastTime?.let { nowMs - it < cooldownMs } == true) return false
+        if (!newBlockAfterRecovery &&
+            times[warning]?.let { nowMs - it < perWarningCooldown } == true) return false
+        // A newly found route after a blocked view should be announced once promptly.
+        val directionAfterBlock = (warning == Warning.PATH_LEFT || warning == Warning.PATH_RIGHT) &&
+            lastWarning == Warning.PATH_BLOCKED
+        if (!warning.urgent && warning != Warning.PATH_CLEAR &&
+            !directionAfterBlock && !newBlockAfterRecovery &&
+            lastTime?.let { nowMs - it < cooldownMs } == true) return false
         times[warning] = nowMs
         lastTime = nowMs
+        lastWarning = warning
         return true
     }
-    fun reset() { times.clear(); lastTime = null }
+    fun reset() { times.clear(); lastTime = null; lastWarning = null }
 }

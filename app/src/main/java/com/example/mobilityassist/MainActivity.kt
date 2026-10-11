@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
     private var failed = false
     private var permissionBlocked = false
     private var lastWarningMs = 0L
+    private var pathWarningAnnounced = false // Main thread; enables one recovery announcement.
     private var lastMetricsLogMs = 0L
 
     // -----------------------------------------------------------------------
@@ -244,6 +245,7 @@ class MainActivity : ComponentActivity() {
                     paused = !paused
                     generation.incrementAndGet()
                     feedback.stop()
+                    pathWarningAnnounced = false
                     overlay.show(emptyList())
                     metrics.clear()
                     diagnostics.text = ""
@@ -267,7 +269,9 @@ class MainActivity : ComponentActivity() {
         worker.execute {
             try {
                 detector = ObjectDetectorHelper(applicationContext)
-                pathSegmenter = try { PathSegmenter(applicationContext) } catch (error: Exception) {
+                pathSegmenter = try {
+                    PathSegmenter(applicationContext, PathSegmenter.FAST_SAMPLE_INTERVAL_MS, true)
+                } catch (error: Exception) {
                     Log.w("MobilityAssist", "Optional path segmenter unavailable", error)
                     null
                 }
@@ -292,6 +296,7 @@ class MainActivity : ComponentActivity() {
         scannerPanel.visibility = View.VISIBLE
         scanningEnabled = true
         paused = false
+        pathWarningAnnounced = false
         updateButton()
         if (initialized) {
             if (hasCameraPermission()) preview.post { bindCamera() }
@@ -310,6 +315,7 @@ class MainActivity : ComponentActivity() {
         angleDetector.unregister()
         frameAnalyzer.reset()
         feedback.stop()
+        pathWarningAnnounced = false
         overlay.show(emptyList())
         resetPhase3StateToIdle()
         scannerPanel.visibility = View.GONE
@@ -438,29 +444,42 @@ class MainActivity : ComponentActivity() {
                                 null
                             }
 
-                            // Object boxes retain priority over the tentative wall label.
+                            // Object boxes retain priority over tentative path guidance.
                             val result = checkNotNull(detector).detect(frame)
                             val objectWarning = engine.decide(result.objects)
+                            val pathWarning = PathWarningSelector.select(
+                                pathResult, result.objects,
+                                angleSuitable && frameResult?.occlusionState == OcclusionState.CLEAR
+                            )
                             val candidate = when {
                                 objectWarning == Warning.STOP || objectWarning == Warning.AHEAD -> objectWarning
-                                pathResult?.blocked == true && angleSuitable &&
-                                    frameResult?.occlusionState == OcclusionState.CLEAR -> Warning.PATH_BLOCKED
+                                pathWarning != null -> pathWarning
                                 else -> objectWarning
                             }
-                            val warning = stabilizer.observe(
-                                candidate,
-                                SystemClock.elapsedRealtime()
-                            )
+                            // PathGuidanceTracker confirms independent model results. Do not
+                            // require more CameraX frames or count a cached mask as evidence.
+                            val warning = if (candidate == pathWarning && pathWarning != null) {
+                                stabilizer.reset()
+                                pathWarning
+                            } else stabilizer.observe(candidate, SystemClock.elapsedRealtime())
 
                             runOnUiThread {
                                 if (active && !destroyed && token == generation.get()) {
                                     // ---- Existing obstacle UI ----
                                     overlay.show(result.objects, pathResult)
-                                    val emitted = warning?.let(feedback::warn) ?: false
+                                    val emitted = warning?.takeUnless {
+                                        it == Warning.PATH_CLEAR && !pathWarningAnnounced
+                                    }?.let(feedback::warn) ?: false
                                     val nowMs = SystemClock.elapsedRealtime()
                                     if (emitted) {
                                         status.text = warning!!.text
                                         lastWarningMs = nowMs
+                                        when (warning) {
+                                            Warning.PATH_BLOCKED, Warning.PATH_LEFT, Warning.PATH_RIGHT ->
+                                                pathWarningAnnounced = true
+                                            Warning.PATH_CLEAR -> pathWarningAnnounced = false
+                                            else -> Unit
+                                        }
                                     } else if (nowMs - lastWarningMs > 3_000L &&
                                         status.text != getString(R.string.scanning)
                                     ) {
@@ -812,6 +831,7 @@ class MainActivity : ComponentActivity() {
         safeTorchOff()
         provider?.unbindAll()
         feedback.stop()
+        pathWarningAnnounced = false
         overlay.show(emptyList())
         status.text = message
         status.announceForAccessibility(message)
@@ -866,6 +886,7 @@ class MainActivity : ComponentActivity() {
         angleDetector.unregister()     // Phase 3: unregister sensors
         frameAnalyzer.reset()          // Phase 3: clear brightness/occlusion state
         feedback.stop()                // resets both obstacle gate AND phase3Gate
+        pathWarningAnnounced = false
         overlay.show(emptyList())
         metrics.clear()
         diagnostics.text = ""

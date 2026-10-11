@@ -74,4 +74,15 @@ class DecisionEngineTest {
         assertNull(stabilizer.observe(Warning.AHEAD, 1_000))
         assertNull(stabilizer.observe(Warning.AHEAD, 2_300)) // Stale observations do not confirm.
     }
+
+    @Test fun directionCanFollowGenericBlockButDoesNotRepeatEveryFrame() {
+        val gate = WarningGate()
+        assertTrue(gate.allow(Warning.PATH_BLOCKED, 0L))
+        assertTrue(gate.allow(Warning.PATH_LEFT, 700L))
+        assertFalse(gate.allow(Warning.PATH_LEFT, 1_400L))
+        assertTrue(gate.allow(Warning.PATH_CLEAR, 2_100L))
+        assertFalse(gate.allow(Warning.PATH_CLEAR, 2_800L))
+        assertFalse(gate.allow(Warning.PATH_BLOCKED, 3_000L))
+        assertTrue(gate.allow(Warning.PATH_BLOCKED, 4_200L))
+    }
 }

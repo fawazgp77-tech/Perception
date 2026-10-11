@@ -10,8 +10,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "5.0-demo"
+        versionCode = 6
+        versionName = "5.1-demo"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
