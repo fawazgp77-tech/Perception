@@ -1,4 +1,6 @@
-# Phase 4 implementation audit and phone checks
+# Phase 4 implementation audit and phone checks (historical)
+
+The later path/depth prototype replaces the ML Kit image-level Wall labeler described below. See [PATH_DEPTH_TEST_PLAN.md](PATH_DEPTH_TEST_PLAN.md) for the current pipeline and phone tests.
 
 ## What the code now does
 

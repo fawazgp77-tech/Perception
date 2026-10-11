@@ -6,6 +6,13 @@
     <string name="menu_title">Mobility Assist</string>
     <string name="enable_speech">Spoken obstacle guidance</string>
     <string name="start_assistance">Start camera assistance</string>
+    <string name="start_depth_assistance">Try depth-enhanced assistance</string>
+    <string name="depth_starting">Starting depth assistance…</string>
+    <string name="depth_scanning">Depth assistance scanning</string>
+    <string name="depth_note">Depth improves broad barrier alerts where supported. Keep using your usual mobility aid.</string>
+    <string name="depth_permission_required">Camera permission is required.</string>
+    <string name="depth_unavailable">ARCore Depth is unavailable on this phone. Use camera assistance.</string>
+    <string name="depth_start_failed">Depth could not start. Use camera assistance.</string>
     <string name="map_navigation_title">Walking directions</string>
     <string name="destination_hint">Enter an address or place</string>
     <string name="speak_destination">Speak destination</string>

@@ -45,6 +45,12 @@
             android:layout_height="64dp"
             android:text="@string/start_assistance" />
 
+        <Button
+            android:id="@+id/startDepthAssistance"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:text="@string/start_depth_assistance" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

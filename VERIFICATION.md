@@ -1,5 +1,7 @@
 # Verification — Mobility Assist
 
+For the current path/depth build, see [docs/PATH_DEPTH_TEST_PLAN.md](docs/PATH_DEPTH_TEST_PLAN.md). Earlier phase records below remain historical.
+
 ---
 
 ## Phase 1 — Build and automated testing (2026-10-08)

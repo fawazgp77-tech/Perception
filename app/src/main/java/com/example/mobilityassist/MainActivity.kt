@@ -58,8 +58,8 @@ class MainActivity : ComponentActivity() {
     private val metrics = PipelineMetrics()
     private val generation = AtomicInteger()
     private var detector: ObjectDetectorHelper? = null  // Worker thread only.
-    private var sceneLabeler: SceneLabeler? = null // Worker thread only.
-    @Volatile private var wallUntilMs = 0L
+    private var pathSegmenter: PathSegmenter? = null // Worker thread only.
+    @Volatile private var angleSuitable = false
     private var provider: ProcessCameraProvider? = null
     private var analysis: ImageAnalysis? = null
     @Volatile private var active = false
@@ -181,6 +181,9 @@ class MainActivity : ComponentActivity() {
             feedback.setSpeechEnabled(checked)
         }
         findViewById<Button>(R.id.startAssistance).setOnClickListener { showScanner() }
+        findViewById<Button>(R.id.startDepthAssistance).setOnClickListener {
+            startActivity(Intent(this, ArCoreDepthActivity::class.java))
+        }
         findViewById<Button>(R.id.backToMenu).setOnClickListener { showMenu() }
         findViewById<Button>(R.id.speakDestination).setOnClickListener { requestDestinationSpeech() }
         findViewById<Button>(R.id.previewWalkingRoute).setOnClickListener {
@@ -205,6 +208,7 @@ class MainActivity : ComponentActivity() {
         // Phase 3: angle detector — callback fires on main thread
         angleDetector = AngleDetector(this) { state, guidance ->
             if (!active || destroyed || paused) return@AngleDetector
+            angleSuitable = state == AngleState.GOOD
             phase3State = phase3State.copy(angle = state)
             updatePhase3Ui()
             if (guidance != null) {
@@ -263,8 +267,8 @@ class MainActivity : ComponentActivity() {
         worker.execute {
             try {
                 detector = ObjectDetectorHelper(applicationContext)
-                sceneLabeler = try { SceneLabeler() } catch (error: Exception) {
-                    Log.w("MobilityAssist", "Optional wall labeler unavailable", error)
+                pathSegmenter = try { PathSegmenter(applicationContext) } catch (error: Exception) {
+                    Log.w("MobilityAssist", "Optional path segmenter unavailable", error)
                     null
                 }
                 runOnUiThread {
@@ -297,7 +301,7 @@ class MainActivity : ComponentActivity() {
 
     private fun showMenu() {
         scanningEnabled = false
-        wallUntilMs = 0L
+        angleSuitable = false
         generation.incrementAndGet()
         analysis?.clearAnalyzer()
         safeTorchOff()
@@ -394,7 +398,7 @@ class MainActivity : ComponentActivity() {
                 cameraProvider.unbindAll()
                 analysis = imageAnalysis
                 frameAnalyzer.reset()
-                wallUntilMs = 0L
+                angleSuitable = false
 
                 imageAnalysis.setAnalyzer(worker) { frame ->
                     val startedNs = SystemClock.elapsedRealtimeNanos()
@@ -403,6 +407,7 @@ class MainActivity : ComponentActivity() {
                         if (active && token == generation.get() && !destroyed) {
                             if (guidanceGeneration != token) {
                                 stabilizer.reset()
+                                pathSegmenter?.reset()
                                 guidanceGeneration = token
                             }
 
@@ -424,15 +429,13 @@ class MainActivity : ComponentActivity() {
                                 null
                             }
 
-                            try {
-                                sceneLabeler?.maybeAnalyze(frame) { confirmed ->
-                                    if (token == generation.get() && active && scanningEnabled) {
-                                        wallUntilMs = if (confirmed)
-                                            SystemClock.elapsedRealtime() + 4_000L else 0L
-                                    }
-                                }
+                            val pathResult = try {
+                                pathSegmenter?.maybeAnalyze(frame)
                             } catch (error: Exception) {
-                                Log.w("MobilityAssist", "Scene labeler unavailable", error)
+                                Log.w("MobilityAssist", "Path segmenter unavailable", error)
+                                pathSegmenter?.close()
+                                pathSegmenter = null
+                                null
                             }
 
                             // Object boxes retain priority over the tentative wall label.
@@ -440,7 +443,8 @@ class MainActivity : ComponentActivity() {
                             val objectWarning = engine.decide(result.objects)
                             val candidate = when {
                                 objectWarning == Warning.STOP || objectWarning == Warning.AHEAD -> objectWarning
-                                SystemClock.elapsedRealtime() < wallUntilMs -> Warning.POSSIBLE_WALL
+                                pathResult?.blocked == true && angleSuitable &&
+                                    frameResult?.occlusionState == OcclusionState.CLEAR -> Warning.PATH_BLOCKED
                                 else -> objectWarning
                             }
                             val warning = stabilizer.observe(
@@ -451,7 +455,7 @@ class MainActivity : ComponentActivity() {
                             runOnUiThread {
                                 if (active && !destroyed && token == generation.get()) {
                                     // ---- Existing obstacle UI ----
-                                    overlay.show(result.objects)
+                                    overlay.show(result.objects, pathResult)
                                     val emitted = warning?.let(feedback::warn) ?: false
                                     val nowMs = SystemClock.elapsedRealtime()
                                     if (emitted) {
@@ -853,7 +857,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         active = false
-        wallUntilMs = 0L
+        angleSuitable = false
         generation.incrementAndGet()
         analysis?.clearAnalyzer()
         safeTorchOff()
@@ -881,7 +885,7 @@ class MainActivity : ComponentActivity() {
         // Queued after any in-flight inference; never closes detector mid-call.
         worker.execute {
             detector?.close(); detector = null
-            sceneLabeler?.close(); sceneLabeler = null
+            pathSegmenter?.close(); pathSegmenter = null
         }
         worker.shutdown()
         super.onDestroy()

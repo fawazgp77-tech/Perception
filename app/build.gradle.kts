@@ -10,8 +10,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "4.0-demo"
+        versionCode = 5
+        versionName = "5.0-demo"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -35,6 +35,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraX")
     implementation("androidx.camera:camera-view:$cameraX")
     implementation("com.google.mediapipe:tasks-vision:0.10.21")
-    implementation("com.google.mlkit:image-labeling:17.0.9")
+    implementation("org.tensorflow:tensorflow-lite:2.17.0")
+    implementation("com.google.ar:core:1.56.0")
     testImplementation("junit:junit:4.13.2")
 }

@@ -5,6 +5,7 @@ local.properties
 *.iml
 .verification/
 .toolchain/
+model-download.zip
 .kotlin/
 .codex-finalizer/
 presentation-build/

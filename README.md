@@ -1,8 +1,8 @@
-# Mobility Assist — Phase 4 prototype
+# Mobility Assist — path and depth prototype
 
 > **Important safety notice:** Mobility Assist is a supervised prototype aid — not a validated mobility device. It cannot detect all hazards. Always use a cane, guide dog, or human assistance. A warning-free frame does not mean the path is safe.
 
-The current build fixes Phase 3 angle and lens warnings, broadens object classes, adds a cautious wall alert, and provides a start menu with a Google Maps walking-route handoff. Camera analysis remains on-device; Maps and speech recognition may need internet access. The Maps route runs in Google Maps while camera assistance is paused.
+The current build adds on-device walkable-surface segmentation and an optional ARCore Depth scanner to the Phase 4 app. The regular CameraX scanner works without ARCore. Camera analysis remains on-device; Maps and speech recognition may need internet access. The Maps route runs in Google Maps while camera assistance is paused.
 
 See [`docs/PHASE_4_AUDIT.md`](docs/PHASE_4_AUDIT.md) for the code audit, implementation limits, and phone test plan.
 
@@ -17,7 +17,7 @@ Earlier phases: [`PHASE2_PLAN.md`](PHASE2_PLAN.md) · [`PHASE2_TEST_CHECKLIST.md
 ### Phase 1 / 2 (existing)
 
 - Rear camera → on-device EfficientDet-Lite0 INT8 inference via MediaPipe Tasks Vision.
-- Original Phase 2 seven-class allowlist and five-tier guidance are retained in the Phase 2 archive; the current build uses every class trained into EfficientDet and adds a tentative Wall message.
+- Original Phase 2 seven-class allowlist and five-tier guidance are retained in the Phase 2 archive; the current build uses every class trained into EfficientDet.
 - Two-frame confirmation gate; longer warning cooldowns; urgent STOP interrupts lower-priority speech.
 - Spoken warnings (offline TTS) + distinct vibration patterns.
 - Colored bounding-box overlay with LEFT / CENTER / RIGHT zone guides.
@@ -44,10 +44,18 @@ Detects a dark full-lens cover or a sustained loss of texture and brightness cha
 - The start menu opens camera assistance, controls spoken guidance (enabled by default), accepts a typed or spoken destination, and saves a Home address locally.
 - The walking-route button reads back the destination and opens a Google Maps **walking preview**. Google Maps displays travel time and requests the final Start action. This app does not calculate an ETA or speak turns itself.
 - The bundled EfficientDet model now reports all of its trained COCO classes instead of only seven. This expands coverage but cannot detect every possible obstacle.
-- A second **bundled on-device** ML Kit image labeler checks the central camera view roughly every 1.5 seconds. Two confident Wall labels trigger "Possible wall ahead." It provides no depth or collision guarantee.
+- The earlier ML Kit Wall image labeler has been replaced by pixel-level segmentation. It does not provide distance or collision certainty.
 - Nonurgent obstacle speech has a 6-second cooldown; STOP has a 4-second cooldown; tentative wall reminders have a 15-second cooldown. Camera and angle messages yield to recent obstacle warnings.
 
 This is image-quality-based obstruction detection, not semantic hand recognition.
+
+### Path and depth prototype
+
+- A bundled 2.3 MB quantized DeepLabV3+ ADE20K model marks floor, sidewalk, and wall pixels about once per second. The cyan overlay shows **classified walkable surface**, not a certified safe route.
+- A broad wall across the center must persist across two segmentation results before the app says “Path ahead may be blocked.” It does not warn merely because an image looks plain or has no visible path; blur, darkness, sky, and a covered lens are ambiguous.
+- **Try depth-enhanced assistance** opens an optional ARCore camera mode. On phones with ARCore Depth support, it combines the same object detector and segmentation model with center-view depth evidence. If Depth is unsupported or unavailable, it returns to the regular camera menu.
+- ARCore requires Google Play Services for AR and may prompt to install or update it. The regular scanner has no ARCore requirement. Depth may be unavailable temporarily when tracking, lighting, or phone motion is insufficient.
+- Both modes use the same quiet warning gate. Depth and segmentation are experimental; test with a sighted helper before using them while walking.
 
 ---
 
@@ -90,7 +98,7 @@ app/build/outputs/apk/debug/app-debug.apk
 .\build.ps1 testDebugUnitTest
 ```
 
-Expected: **79 tests, 0 failures** (including Phase 4 unit tests).
+Expected: **84 tests, 0 failures** (including path and depth policy tests).
 Test reports: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
 ### Install on device
@@ -106,10 +114,11 @@ Or open in Android Studio and use Run (▶).
 ## Usage
 
 1. Launch the app. Spoken camera guidance is enabled by default in the start menu.
-2. Tap **Start camera assistance** and grant camera permission. Hold the rear camera toward the scene ahead.
-3. The status row shows **LIGHTING**, **ANGLE**, and **CAMERA**. Use **Pause assistance** / **Resume assistance** or **Back to menu** as needed.
-4. For a walking route, type or speak a destination, review its readback, then open Google Maps. Check the destination and ETA in Maps before tapping its **Start** button.
-5. Enter an address and tap **Save entered address as Home** to use the Home route button later.
+2. Tap **Start camera assistance** and grant camera permission. Hold the rear camera toward the scene ahead. A cyan mask shows classified floor or sidewalk; “Path ahead may be blocked” is deliberately tentative.
+3. On a compatible phone, tap **Try depth-enhanced assistance** from the menu to test ARCore Depth. It uses a separate camera screen; Back returns to the menu. On an unsupported phone, use regular camera assistance.
+4. The regular scanner's status row shows **LIGHTING**, **ANGLE**, and **CAMERA**. Use **Pause assistance** / **Resume assistance** or **Back to menu** as needed.
+5. For a walking route, type or speak a destination, review its readback, then open Google Maps. Check the destination and ETA in Maps before tapping its **Start** button.
+6. Enter an address and tap **Save entered address as Home** to use the Home route button later.
 
 For offline camera assistance, install an offline English TTS voice. Google Maps routing and some installed speech-recognition services require connectivity; typed destination entry remains available.
 
@@ -127,6 +136,8 @@ SHA-256: `0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb`
 
 If missing, download from the [official MediaPipe model page](https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector) and place it at that exact path. Do not rename a different model — MediaPipe requires compatible output tensors and metadata.
 
+The bundled path model is `app/src/main/assets/path_segmentation_ade20k.tflite` (SHA-256 `A4169300913D0B5D96001104D4E2CD6F3CE76A3E386D2CACB3DB9BF11FD264DB`). It is the quantized output-stride-16 model in [MediaTek's Zenodo record](https://zenodo.org/records/3932677), licensed Apache-2.0. See [`docs/PATH_DEPTH_TEST_PLAN.md`](docs/PATH_DEPTH_TEST_PLAN.md) for model provenance, limitations, and phone tests.
+
 ---
 
 ## Pipeline
@@ -135,10 +146,11 @@ If missing, download from the [official MediaPipe model page](https://ai.google.
 2. Analysis requests 640×480 RGBA frames with `STRATEGY_KEEP_ONLY_LATEST`. Old pending frames are dropped.
 3. **Phase 3 new:** `FrameAnalyzer` samples the frame buffer for brightness and obstruction before inference. Mean luminance (green channel proxy) and pixel variance are computed over ~1,600 sampled pixels.
 4. `ObjectDetectorHelper` converts the frame to a bitmap, crops to the viewport, rotates upright, and runs synchronous MediaPipe inference.
-5. `DecisionEngine` classifies detections into warnings using area/region/overlap rules. The bundled ML Kit labeler separately samples the central image for a tentative Wall label.
+5. `DecisionEngine` classifies detections into warnings using area/region/overlap rules. `PathSegmenter` samples the visible crop for a floor/sidewalk/wall mask; `PathPolicy` checks the center and applies temporal confirmation.
 6. **Phase 3 new:** `AngleDetector` receives `TYPE_ROTATION_VECTOR` sensor events on the main thread and classifies pitch/roll into an `AngleState`.
 7. `SpeechHapticManager` speaks obstacle warnings via `warn(Warning)` (QUEUE_FLUSH, existing gate). Phase 3 messages use the new `speak()` method with a separate `Phase3SpeechGate` — obstacle warnings are never blocked by Phase 3 speech.
 8. **Phase 3 new:** `MainActivity.handleFrameAnalysis()` drives torch control via `Camera.cameraControl.enableTorch()`, obstruction speech, and the compact status row UI.
+9. Optional `ArCoreDepthActivity` owns its own ARCore camera session, samples depth in two center bands, and combines it with path and object results. It does not run simultaneously with CameraX.
 
 ---
 
@@ -158,7 +170,8 @@ If missing, download from the [official MediaPipe model page](https://ai.google.
 | `Phase3State.kt` | State enums: `LightingState`, `AngleState`, `OcclusionState` |
 | `FrameAnalyzer.kt` | Brightness estimation + obstruction detection |
 | `AngleDetector.kt` | Sensor orientation estimation + `AngleClassifier` |
-| `SceneLabeler.kt` | Sparse on-device wall image labeling |
+| `PathSegmentation.kt` | Quantized semantic model and center-path policy |
+| `ArCoreDepthActivity.kt` / `DepthPolicy.kt` | Optional ARCore camera and depth evidence |
 | `WalkingRouteUrl.kt` | Encoded Google Maps walking-preview URL |
 | `DecisionEngineTest.kt` | JVM unit tests — obstacle rules and warning cooldown |
 | `PipelineMetricsTest.kt` | 1 JVM unit test — diagnostics (unchanged) |
@@ -188,7 +201,7 @@ See [`VERIFICATION.md`](VERIFICATION.md) for the full status table.
 - Phase 4: automated checks pass; physical-device validation pending. See the [Phase 4 audit](docs/PHASE_4_AUDIT.md).
 
 Known limitations:
-- The models do not guarantee detection of stairs, drop-offs, glass, poles, puddles, or arbitrary unknown obstacles. The Wall result is a tentative scene label, not distance or collision detection.
+- The models do not guarantee detection of stairs, drop-offs, glass, poles, puddles, or arbitrary unknown obstacles. A wall mask is tentative scene classification; ARCore depth is optional and can be unavailable or wrong.
 - Box area is a rough proximity proxy — it is not depth or time-to-collision.
 - Angle guidance is sensor-only (image-based framing deferred).
 - Obstruction detection uses image quality signals, not hand recognition.

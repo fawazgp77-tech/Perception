@@ -31,6 +31,7 @@ enum class Warning(val text: String, val urgent: Boolean = false) {
     STOP("Stop. Obstacle ahead.", true),
     AHEAD("Obstacle ahead."),
     POSSIBLE_WALL("Possible wall ahead."),
+    PATH_BLOCKED("Path ahead may be blocked."),
     OBSTACLE_LEFT("Obstacle on left."),
     OBSTACLE_RIGHT("Obstacle on right."),
     BOTH_SIDES("Obstacles on both sides.")
@@ -70,7 +71,8 @@ class GuidanceStabilizer(private val requiredFrames: Int = 2, private val maxGap
             return null
         }
         val gap = lastObservedMs?.let { nowMs - it }
-        streak = if (candidate == pending && gap != null && gap in 0..maxGapMs) streak + 1 else 1
+        val allowedGapMs = if (candidate == Warning.PATH_BLOCKED) 2_500L else maxGapMs
+        streak = if (candidate == pending && gap != null && gap in 0..allowedGapMs) streak + 1 else 1
         pending = candidate
         lastObservedMs = nowMs
         return if (streak >= requiredFrames) candidate else null
@@ -87,7 +89,7 @@ class WarningGate(private val cooldownMs: Long = 6_000) {
     fun allow(warning: Warning, nowMs: Long): Boolean {
         val perWarningCooldown = when (warning) {
             Warning.STOP -> 4_000L
-            Warning.POSSIBLE_WALL -> 15_000L
+            Warning.POSSIBLE_WALL, Warning.PATH_BLOCKED -> 15_000L
             else -> cooldownMs
         }
         if (times[warning]?.let { nowMs - it < perWarningCooldown } == true) return false

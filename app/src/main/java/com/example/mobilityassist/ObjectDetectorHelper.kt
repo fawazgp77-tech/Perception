@@ -33,28 +33,33 @@ class ObjectDetectorHelper(context: Context) : AutoCloseable {
             val rotation = Matrix().apply { postRotate(frame.imageInfo.rotationDegrees.toFloat()) }
             val image = Bitmap.createBitmap(raw, crop.left, crop.top, crop.width(), crop.height(), rotation, true)
             upright = image
-            val mpImage = BitmapImageBuilder(image).build()
-            try {
-                val convertedNs = SystemClock.elapsedRealtimeNanos()
-                val detections = detector.detect(mpImage).detections()
-                val inferredNs = SystemClock.elapsedRealtimeNanos()
-                val objects = detections.mapNotNull { detection ->
-                    val category = detection.categories().maxByOrNull { it.score() } ?: return@mapNotNull null
-                    val box = detection.boundingBox()
-                    val left = (box.left / image.width).coerceIn(0f, 1f)
-                    val top = (box.top / image.height).coerceIn(0f, 1f)
-                    val right = (box.right / image.width).coerceIn(0f, 1f)
-                    val bottom = (box.bottom / image.height).coerceIn(0f, 1f)
-                    if (right <= left || bottom <= top) null else
-                        Obstacle(category.categoryName(), category.score(), left, top, right, bottom)
-                }
-                return Result(objects, (convertedNs - startNs) / 1_000_000L,
-                    (inferredNs - convertedNs) / 1_000_000L)
-            } finally { mpImage.close() }
+            return detectBitmap(image, (SystemClock.elapsedRealtimeNanos() - startNs) / 1_000_000L)
         } finally {
             if (upright !== raw) upright?.recycle()
             raw.recycle()
         }
+    }
+
+    /** Caller owns the upright bitmap, allowing ARCore's camera path to reuse this detector. */
+    fun detectBitmap(image: Bitmap, conversionMs: Long = 0L): Result {
+        val startNs = SystemClock.elapsedRealtimeNanos()
+        val mpImage = BitmapImageBuilder(image).build()
+        try {
+            val detections = detector.detect(mpImage).detections()
+            val inferredNs = SystemClock.elapsedRealtimeNanos()
+            val objects = detections.mapNotNull { detection ->
+                val category = detection.categories().maxByOrNull { it.score() } ?: return@mapNotNull null
+                val box = detection.boundingBox()
+                val left = (box.left / image.width).coerceIn(0f, 1f)
+                val top = (box.top / image.height).coerceIn(0f, 1f)
+                val right = (box.right / image.width).coerceIn(0f, 1f)
+                val bottom = (box.bottom / image.height).coerceIn(0f, 1f)
+                if (right <= left || bottom <= top) null else
+                    Obstacle(category.categoryName(), category.score(), left, top, right, bottom)
+            }
+            return Result(objects, conversionMs,
+                (inferredNs - startNs) / 1_000_000L)
+        } finally { mpImage.close() }
     }
 
     override fun close() = detector.close()
