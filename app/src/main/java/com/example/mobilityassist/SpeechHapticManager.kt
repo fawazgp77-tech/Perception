@@ -101,8 +101,10 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
         val now = SystemClock.elapsedRealtime()
         if (priority != SpeechPriority.URGENT &&
             now - lastObstacleSpeechMs in 0..5_999L) return false
-        if (!phase3Gate.allow(cooldownKey, cooldownMs, now)) return false
         val recentObstacle = now - lastObstacleSpeechMs in 0..2_999L
+        // Do not queue a stale turn behind a camera warning. Retry on the next fix.
+        if (recentObstacle && cooldownKey.startsWith("map_turn_now_")) return false
+        if (!phase3Gate.allow(cooldownKey, cooldownMs, now)) return false
         val queueMode = if (priority == SpeechPriority.URGENT && !recentObstacle)
             TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         val result = tts?.speak(text, queueMode, null, "p3_$cooldownKey")

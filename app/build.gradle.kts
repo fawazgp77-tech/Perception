@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "5.1-mappls-diagnostics"
+        versionCode = 11
+        versionName = "5.1-live-guidance"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

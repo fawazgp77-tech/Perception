@@ -95,7 +95,7 @@ class PathSegmenter(
 
     private fun cachedResult(now: Long) = lastResult
         ?.takeIf { now - lastRunMs < 2_000L }
-        ?.copy(guidance = null)
+        ?.copy(guidance = null, fresh = false)
 
     companion object {
         const val MODEL = "path_segmentation_ade20k.tflite"
@@ -116,8 +116,20 @@ data class PathAssessment(
     val forwardClear: Boolean,
     val clearerSide: Region?,
     val broadSurface: Boolean = false,
-    val guidance: Warning? = null
-)
+    val guidance: Warning? = null,
+    val fresh: Boolean = true
+) {
+    fun floorVisible(): Boolean {
+        if (width <= 0 || height <= 0 || walkableMask.size != width * height) return false
+        var floor = 0
+        var total = 0
+        for (y in height * 3 / 4 until height) for (x in width / 3 until width * 2 / 3) {
+            if (walkableMask[y * width + x]) floor++
+            total++
+        }
+        return floor.toFloat() / total.coerceAtLeast(1) >= 0.12f
+    }
+}
 
 /** Consumes only new model results, so cached CameraX frames cannot confirm a route. */
 class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {

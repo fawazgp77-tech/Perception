@@ -110,7 +110,7 @@ class InAppWalkingMap(
         if (marker == null) currentMarker = m.addMarker(MarkerOptions().position(latLng).title("You are here"))
         else marker.position = latLng
         val now = SystemClock.elapsedRealtime()
-        if ((following || route == null && selected == null) && now - lastPanMs >= 1_500L) {
+        if ((following || route == null && selected == null) && now - lastPanMs >= 750L) {
             m.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16.5))
             lastPanMs = now
         }

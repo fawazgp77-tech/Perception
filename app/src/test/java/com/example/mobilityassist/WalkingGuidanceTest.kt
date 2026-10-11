@@ -17,7 +17,7 @@ class WalkingGuidanceTest {
         guide.markSpoken(soon)
         assertNull(guide.update(GeoPosition(20.0, 77.0006), 5f))
         val now = guide.update(GeoPosition(20.0, 77.00095), 5f)
-        assertEquals("Turn right", now?.text)
+        assertEquals("Turn right now.", now?.text)
         assertEquals(now, guide.update(GeoPosition(20.0, 77.00096), 5f))
         guide.markSpoken(now!!)
         assertNull(guide.update(GeoPosition(20.0, 77.00096), 5f))
@@ -29,10 +29,18 @@ class WalkingGuidanceTest {
         assertEquals("uncertain", cue?.key)
     }
 
-    @Test fun offRouteNeedsThreeAccurateFixes() {
+    @Test fun offRouteNeedsTwoAccurateFixes() {
         val guide = WalkingGuidance(listOf(start, end), emptyList(), end)
         val away = GeoPosition(20.001, 77.0)
         assertNull(guide.update(away, 5f))
+        assertEquals("reroute", guide.update(away, 5f)?.key)
+    }
+
+    @Test fun inaccurateFixBreaksOffRouteStreak() {
+        val guide = WalkingGuidance(listOf(start, end), emptyList(), end)
+        val away = GeoPosition(20.001, 77.0)
+        assertNull(guide.update(away, 5f))
+        assertEquals("uncertain", guide.update(away, 30f)?.key)
         assertNull(guide.update(away, 5f))
         assertEquals("reroute", guide.update(away, 5f)?.key)
     }

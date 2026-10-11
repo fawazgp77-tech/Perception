@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var feedback: SpeechHapticManager
     private val worker = Executors.newSingleThreadExecutor()
     private val engine = DecisionEngine()
+    private val scanRecovery = ScanRecoveryTracker()
     private val stabilizer = GuidanceStabilizer()   // Analysis worker only.
     private var guidanceGeneration = -1              // Analysis worker only.
     private val metrics = PipelineMetrics()
@@ -294,19 +295,13 @@ class MainActivity : ComponentActivity() {
         }
 
         // Phase 3: angle detector — callback fires on main thread
-        angleDetector = AngleDetector(this) { state, guidance ->
+        angleDetector = AngleDetector(this) { state, _ ->
             if (!active || destroyed || paused) return@AngleDetector
             angleSuitable = state == AngleState.GOOD
             phase3State = phase3State.copy(angle = state)
             updatePhase3Ui()
-            if (guidance != null) {
-                feedback.speak(
-                    text         = guidance,
-                    priority     = SpeechPriority.INFORMATIONAL,
-                    cooldownKey  = "angle_guidance",
-                    cooldownMs   = 20_000L
-                )
-            }
+            // Spoken correction is driven by the analyzed floor mask below, not
+            // by orientation alone. A good angle never needs a spoken message.
         }
 
         paused = savedInstanceState?.getBoolean("paused") ?: false
@@ -570,7 +565,10 @@ class MainActivity : ComponentActivity() {
         val km = (route.route.distance() ?: 0.0) / 1000.0
         val message = getString(R.string.route_confirm_details, originText, origin.accuracy,
             route.destinationName, minutes, km)
-        feedback.speak(message.replace("\n", ". "), SpeechPriority.IMPORTANT,
+        val spokenName = route.destinationName.substringBefore(',').trim()
+            .ifBlank { route.destinationName }
+        feedback.speak("From your current location to $spokenName. About $minutes minutes. Start walking navigation?",
+            SpeechPriority.IMPORTANT,
             "route_confirmation", 0L)
         AlertDialog.Builder(this)
             .setTitle(R.string.route_confirm_title)
@@ -609,6 +607,7 @@ class MainActivity : ComponentActivity() {
         }
         feedback.speak("Walking route started. Camera warnings take priority.",
             SpeechPriority.IMPORTANT, "route_started", 0L)
+        locationTracker.latest?.let(::onLocationFix)
     }
 
     private fun guidanceFor(value: WalkingRoute): WalkingGuidance {
@@ -618,8 +617,8 @@ class MainActivity : ComponentActivity() {
             if (maneuver.type() == "depart" || maneuver.type() == "arrive") return@mapNotNull null
             val modifier = maneuver.modifier()?.lowercase().orEmpty()
             val instruction = when {
-                modifier.contains("slight left") -> "Bear left"
-                modifier.contains("slight right") -> "Bear right"
+                modifier.contains("slight left") -> "Take a slight left"
+                modifier.contains("slight right") -> "Take a slight right"
                 modifier.contains("left") -> "Turn left"
                 modifier.contains("right") -> "Turn right"
                 modifier.contains("straight") -> "Continue straight"
@@ -648,7 +647,9 @@ class MainActivity : ComponentActivity() {
             GeoPosition(location.latitude, location.longitude), location.accuracy) ?: return
         if (navigationStatus.text.toString() != cue.text) navigationStatus.text = cue.text
         if (cue.key == "reroute") rerouteFrom(location)
-        if (feedback.speak(cue.text, SpeechPriority.IMPORTANT, "map_${cue.key}", 20_000L)) {
+        val priority = if (cue.key.startsWith("turn_now_") || cue.key == "reroute")
+            SpeechPriority.URGENT else SpeechPriority.IMPORTANT
+        if (feedback.speak(cue.text, priority, "map_${cue.key}", 20_000L)) {
             walkingGuidance?.markSpoken(cue)
         }
     }
@@ -656,7 +657,7 @@ class MainActivity : ComponentActivity() {
     private fun rerouteFrom(location: Location) {
         val route = walkingRoute ?: return
         val now = SystemClock.elapsedRealtime()
-        if (rerouting || now - lastRerouteMs < 30_000L) return
+        if (rerouting || now - lastRerouteMs < 10_000L) return
         rerouting = true
         lastRerouteMs = now
         val requestId = routeRequestId
@@ -753,6 +754,7 @@ class MainActivity : ComponentActivity() {
                         if (active && token == generation.get() && !destroyed) {
                             if (guidanceGeneration != token) {
                                 stabilizer.reset()
+                                scanRecovery.reset()
                                 pathSegmenter?.reset()
                                 guidanceGeneration = token
                             }
@@ -786,21 +788,21 @@ class MainActivity : ComponentActivity() {
 
                             // Object boxes retain priority over tentative path guidance.
                             val result = checkNotNull(detector).detect(frame)
-                            val objectWarning = engine.decide(result.objects)
+                            val reliableView = angleSuitable &&
+                                frameResult?.occlusionState == OcclusionState.CLEAR
+                            val objectWarning = engine.decide(result.objects, pathResult, reliableView)
                             val pathWarning = PathWarningSelector.select(
                                 pathResult, result.objects,
-                                angleSuitable && frameResult?.occlusionState == OcclusionState.CLEAR
+                                reliableView
                             )
-                            val candidate = when {
-                                objectWarning == Warning.STOP || objectWarning == Warning.AHEAD -> objectWarning
-                                pathWarning != null -> pathWarning
-                                else -> objectWarning
-                            }
+                            val candidate = scanRecovery.observe(objectWarning ?: pathWarning,
+                                pathResult, reliableView, result.objects)
                             // PathGuidanceTracker confirms independent model results. Do not
                             // require more CameraX frames or count a cached mask as evidence.
-                            val warning = if (candidate == pathWarning && pathWarning != null) {
+                            val warning = if (candidate == Warning.PATH_CLEAR ||
+                                candidate == pathWarning && pathWarning != null) {
                                 stabilizer.reset()
-                                pathWarning
+                                candidate
                             } else stabilizer.observe(candidate, SystemClock.elapsedRealtime())
 
                             runOnUiThread {
@@ -815,6 +817,7 @@ class MainActivity : ComponentActivity() {
                                         status.text = warning!!.text
                                         lastWarningMs = nowMs
                                         when (warning) {
+                                            Warning.SCAN_LEFT, Warning.SCAN_RIGHT, Warning.SCAN_SIDES,
                                             Warning.POSSIBLE_OBSTRUCTION, Warning.PATH_BLOCKED,
                                             Warning.PATH_LEFT, Warning.PATH_RIGHT ->
                                                 pathWarningAnnounced = true
@@ -830,6 +833,14 @@ class MainActivity : ComponentActivity() {
                                     // ---- Phase 3 frame analysis results ----
                                     if (frameResult != null) {
                                         handleFrameAnalysis(frameResult)
+                                    }
+                                    if (frameResult?.occlusionState == OcclusionState.CLEAR && pathResult != null &&
+                                        phase3State.angle != AngleState.GOOD &&
+                                        !pathResult.blocked &&
+                                        result.objects.none { it.blocksCenter && it.proximity != Proximity.FAR } &&
+                                        !pathResult.floorVisible()) {
+                                        feedback.speak("Tilt the phone until the floor is visible.",
+                                            SpeechPriority.INFORMATIONAL, "floor_angle", 5_000L)
                                     }
 
                                     // ---- Diagnostics ----

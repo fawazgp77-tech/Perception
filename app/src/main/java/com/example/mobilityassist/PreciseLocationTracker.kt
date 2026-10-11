@@ -124,7 +124,9 @@ class PreciseLocationTracker(
         if (old != null) {
             if (location.elapsedRealtimeNanos < old.elapsedRealtimeNanos) return
             val oldAgeMs = (SystemClock.elapsedRealtimeNanos() - old.elapsedRealtimeNanos) / 1_000_000L
-            if (oldAgeMs in 0..5_000L && location.accuracy > old.accuracy + 10f) return
+            // Reject a brief noisy replacement, but do not freeze the moving
+            // marker for five seconds when accuracy worsens outdoors.
+            if (oldAgeMs in 0..1_500L && location.accuracy > old.accuracy + 10f) return
         }
         latest = location
         onFix(location)

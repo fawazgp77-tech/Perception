@@ -1,5 +1,14 @@
 # Verification — Mobility Assist
 
+## Live walking guidance update (2026-10-11)
+
+- `testDebugUnitTest assembleDebug lintDebug` completed successfully with JDK 17 and Android SDK 35; 101 JVM tests passed with 0 failures and 0 errors. Lint reported 0 errors and 26 warnings.
+- Debug APK: `app/build/outputs/apk/debug/app-debug.apk`, versionCode 11, versionName `5.1-live-guidance`, 126,902,047 bytes, SHA-256 `BDDA1FC5949491300D831948A95935115E988065A59D2BB2DA844DF22CBA4E71`. Android `apksigner verify` passed.
+- The Mappls Gradle task parsed the current matching config pair, `app1791717620514i383691408.a.conf` and `.a.olf`. Runtime Mappls service access still requires phone testing.
+- New tests cover far-obstacle filtering, connected-floor lateral guidance, scan recovery after two fresh path masks, floor visibility, and consecutive accurate off-route fixes. See the phone checklist in `README.md`; spoken timing, GPS behavior and real-world obstacle decisions remain unverified on a physical device.
+
+---
+
 For the current path/depth build, see [docs/PATH_DEPTH_TEST_PLAN.md](docs/PATH_DEPTH_TEST_PLAN.md). Earlier phase records below remain historical.
 
 ---

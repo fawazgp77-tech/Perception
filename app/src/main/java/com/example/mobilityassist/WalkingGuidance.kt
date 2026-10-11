@@ -19,15 +19,19 @@ class WalkingGuidance(
     private var pendingNow: Pair<Int, NavigationCue>? = null
 
     fun update(position: GeoPosition, accuracyMeters: Float): NavigationCue? {
-        if (accuracyMeters > 25f) return NavigationCue("uncertain", "Location accuracy is low. Turn guidance is paused.")
+        if (accuracyMeters > 18f) {
+            offRouteFixes = 0
+            arrivalFixes = 0
+            return NavigationCue("uncertain", "Location accuracy is low. Turn guidance is paused.")
+        }
 
         val toDestination = distanceMeters(position, destination)
         if (toDestination <= 18.0 && accuracyMeters <= 15f) arrivalFixes++ else arrivalFixes = 0
         if (arrivalFixes >= 2) return unspoken("arrival", "Near destination. Check the entrance and surroundings.")
 
-        if (shape.size >= 2 && distanceToRoute(position, shape) > max(45.0, accuracyMeters * 2.0))
+        if (shape.size >= 2 && distanceToRoute(position, shape) > max(28.0, accuracyMeters * 2.0))
             offRouteFixes++ else offRouteFixes = 0
-        if (offRouteFixes >= 3) return NavigationCue("reroute", "You may be off the walking route. Updating directions.")
+        if (offRouteFixes >= 2) return NavigationCue("reroute", "You may be off route. Updating walking directions.")
 
         pendingNow?.let { (i, cue) ->
             if (distanceMeters(position, turns[i].position) <= 25.0)
@@ -36,7 +40,7 @@ class WalkingGuidance(
         }
         if (nextTurn < turns.size && distanceMeters(position, turns[nextTurn].position) <= 12.0) {
             val i = nextTurn++
-            val cue = NavigationCue("turn_now_$i", turns[i].instruction)
+            val cue = NavigationCue("turn_now_$i", "${turns[i].instruction} now.")
             pendingNow = i to cue
             return cue
         }
@@ -45,7 +49,7 @@ class WalkingGuidance(
             val distance = distanceMeters(position, turn.position)
             if (distance <= 55.0) {
                 val rounded = ((distance / 10.0).roundToInt() * 10).coerceAtLeast(10)
-                return unspoken("turn_soon_$nextTurn", "In about $rounded meters, ${turn.instruction.replaceFirstChar { it.lowercase() }}")
+                return unspoken("turn_soon_$nextTurn", "${turn.instruction} in about $rounded meters.")
             }
         }
         return null
@@ -56,7 +60,7 @@ class WalkingGuidance(
         if (pendingNow?.second?.key == cue.key) pendingNow = null
     }
 
-    fun isOffRoute(): Boolean = offRouteFixes >= 3
+    fun isOffRoute(): Boolean = offRouteFixes >= 2
 
     private fun unspoken(key: String, text: String): NavigationCue? =
         if (key in spoken) null else NavigationCue(key, text)

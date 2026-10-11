@@ -14,8 +14,8 @@ class DecisionEngineTest {
         assertEquals(Proximity.NEAR, center(.16f).proximity)
         assertEquals(Proximity.VERY_NEAR, center(.5f).proximity)
         assertNull(engine.decide(listOf(center(.1f))))
-        assertEquals(Warning.AHEAD, engine.decide(listOf(left, center(.2f))))
-        assertEquals(Warning.STOP, engine.decide(listOf(left, right, center(.5f))))
+        assertEquals(Warning.SCAN_RIGHT, engine.decide(listOf(left, center(.2f))))
+        assertEquals(Warning.SCAN_SIDES, engine.decide(listOf(left, right, center(.5f))))
     }
     @Test fun sideRulesAndEmptyScene() {
         assertNull(engine.decide(emptyList()))
@@ -25,7 +25,7 @@ class DecisionEngineTest {
     }
     @Test fun decisionRulesAlsoHandleNewCocoClasses() {
         val chair = Obstacle("chair", 0.8f, .25f, .1f, .75f, .8f)
-        assertEquals(Warning.STOP, engine.decide(listOf(chair)))
+        assertEquals(Warning.SCAN_SIDES, engine.decide(listOf(chair)))
     }
     @Test fun regionBoundaries() {
         assertEquals(Region.CENTER, left.copy(left = 1f / 3, right = 1f / 3).region)
@@ -36,8 +36,42 @@ class DecisionEngineTest {
         val wideCar = Obstacle("car", .9f, .05f, 0f, .56f, .8f)
         assertEquals(Region.LEFT, wideCar.region)
         assertTrue(wideCar.blocksCenter)
-        assertEquals(Warning.STOP, engine.decide(listOf(wideCar)))
+        assertEquals(Warning.SCAN_RIGHT, engine.decide(listOf(wideCar)))
         assertFalse(left.blocksCenter)
+    }
+    @Test fun farObjectsNeverProduceWarnings() {
+        assertNull(engine.decide(listOf(center(.1f), left.copy(bottom = .1f), right.copy(bottom = .1f))))
+    }
+    @Test fun moveInstructionRequiresConnectedVisibleFloor() {
+        val w = 30
+        val h = 30
+        val mask = BooleanArray(w * h) { i ->
+            val x = i % w
+            val y = i / w
+            y >= 10 && x < 20
+        }
+        val path = PathAssessment(false, mask, w, h, 0f, .4f, true, false, null)
+        assertEquals(Warning.MOVE_LEFT, engine.decide(listOf(center(.5f)), path, true))
+        assertEquals(Warning.SCAN_SIDES, engine.decide(listOf(center(.5f)), path, false))
+        assertEquals(Warning.SCAN_SIDES, engine.decide(listOf(center(.5f)),
+            path.copy(walkableMask = BooleanArray(w * h)), true))
+    }
+    @Test fun floorVisibilityUsesNearCenterPixels() {
+        val mask = BooleanArray(30 * 30) { it / 30 >= 23 && it % 30 in 10..19 }
+        val path = PathAssessment(false, mask, 30, 30, 0f, .2f, false, false, null)
+        assertTrue(path.floorVisible())
+        assertFalse(path.copy(walkableMask = BooleanArray(900)).floorVisible())
+    }
+    @Test fun scanRecoveryNeedsTwoFreshClearFloorResults() {
+        val tracker = ScanRecoveryTracker()
+        val path = PathAssessment(false, BooleanArray(900), 30, 30,
+            0f, .4f, true, true, null)
+        assertEquals(Warning.SCAN_SIDES,
+            tracker.observe(Warning.SCAN_SIDES, path, true, listOf(center(.5f))))
+        assertNull(tracker.observe(null, path.copy(fresh = false), true, emptyList()))
+        assertNull(tracker.observe(null, path, true, emptyList()))
+        assertEquals(Warning.PATH_CLEAR, tracker.observe(null, path, true, emptyList()))
+        assertNull(tracker.observe(null, path, true, emptyList()))
     }
     @Test fun cooldownAndUrgentPreemption() {
         val gate = WarningGate()
