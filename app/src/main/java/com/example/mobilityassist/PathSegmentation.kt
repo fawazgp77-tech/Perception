@@ -2,18 +2,16 @@ package com.example.mobilityassist
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Matrix
 import android.os.SystemClock
-import androidx.camera.core.ImageProxy
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** A sparse, offline ADE20K scene mask. Owned by the CameraX analysis worker. */
+/** A sparse, offline ADE20K scene mask. Owned by the camera analysis worker. */
 class PathSegmenter(
     context: Context,
     private val intervalMs: Long = 1_000L,
-    immediateStrongWall: Boolean = false
+    private val immediateStrongWall: Boolean = false
 ) : AutoCloseable {
     private val model = context.assets.openFd(MODEL).use { fd ->
         fd.createInputStream().channel.map(
@@ -33,23 +31,6 @@ class PathSegmenter(
     init {
         require(interpreter.getInputTensor(0).shape().contentEquals(intArrayOf(1, SIZE, SIZE, 3)))
         require(interpreter.getOutputTensor(0).shape().contentEquals(intArrayOf(1, SIZE, SIZE)))
-    }
-
-    /** Returns the last fresh assessment between inference calls; null when confidence is insufficient. */
-    fun maybeAnalyze(frame: ImageProxy): PathAssessment? {
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastRunMs < intervalMs) return cachedResult(now)
-        val raw = frame.toBitmap()
-        var upright: Bitmap? = null
-        try {
-            val crop = frame.cropRect
-            val rotate = Matrix().apply { postRotate(frame.imageInfo.rotationDegrees.toFloat()) }
-            upright = Bitmap.createBitmap(raw, crop.left, crop.top, crop.width(), crop.height(), rotate, true)
-            return maybeAnalyzeBitmap(upright)
-        } finally {
-            if (upright !== raw) upright?.recycle()
-            raw.recycle()
-        }
     }
 
     /** Bitmap must already match the visible upright camera view; caller retains ownership. */
@@ -75,7 +56,7 @@ class PathSegmenter(
                 val sourceY = y * SIZE / GRID + SIZE / GRID / 2
                 mask[y * GRID + x] = output.getInt((sourceY * SIZE + sourceX) * 4)
             }
-            val assessment = PathPolicy.assess(mask, GRID, GRID)
+            val assessment = PathPolicy.assess(mask, GRID, GRID, immediateStrongWall)
             lastResult = guidance.observe(assessment)
             return lastResult
         } finally { if (scaled !== bitmap) scaled.recycle() }
@@ -97,7 +78,7 @@ class PathSegmenter(
         const val MODEL = "path_segmentation_ade20k.tflite"
         const val SIZE = 512
         const val GRID = 64
-        const val FAST_SAMPLE_INTERVAL_MS = 650L
+        const val FAST_SAMPLE_INTERVAL_MS = 350L
     }
 }
 
@@ -110,8 +91,17 @@ data class PathAssessment(
     val pathFraction: Float,
     val pathContinues: Boolean,
     val forwardClear: Boolean,
+    val strongForwardClear: Boolean,
+    val leftSide: SidePathEvidence,
+    val rightSide: SidePathEvidence,
     val clearerSide: Region?,
     val guidance: Warning? = null
+)
+
+data class SidePathEvidence(
+    val reachableFraction: Float,
+    val wallFraction: Float,
+    val footingFraction: Float
 )
 
 /** Consumes only new model results, so cached CameraX frames cannot confirm a route. */
@@ -125,19 +115,20 @@ class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {
     fun observe(sample: PathAssessment): PathAssessment {
         blockedStreak = if (sample.blocked) blockedStreak + 1 else 0
         val confirmedBlock = sample.blocked &&
-            (blockedStreak >= 2 || (immediateStrongWall && sample.wallFraction >= 0.75f))
+            (blockedStreak >= 2 || (immediateStrongWall && sample.wallFraction >= 0.50f))
         if (confirmedBlock) blockedSeen = true
         val side = if (confirmedBlock) sample.clearerSide else null
         sideStreak = if (side != null && side == pendingSide) sideStreak + 1 else if (side != null) 1 else 0
         pendingSide = side
         clearStreak = if (sample.forwardClear) clearStreak + 1 else 0
-        val recovered = blockedSeen && clearStreak >= 2
+        val recovered = blockedSeen &&
+            (clearStreak >= 2 || (immediateStrongWall && sample.strongForwardClear))
         if (recovered) blockedSeen = false
         val warning = when {
             recovered -> Warning.PATH_CLEAR
-            confirmedBlock && (sideStreak >= 2 || sample.wallFraction >= 0.75f) &&
+            confirmedBlock && (sideStreak >= 2 || sample.wallFraction >= 0.50f) &&
                 side == Region.LEFT -> Warning.PATH_LEFT
-            confirmedBlock && (sideStreak >= 2 || sample.wallFraction >= 0.75f) &&
+            confirmedBlock && (sideStreak >= 2 || sample.wallFraction >= 0.50f) &&
                 side == Region.RIGHT -> Warning.PATH_RIGHT
             confirmedBlock -> Warning.PATH_BLOCKED
             else -> null
@@ -158,7 +149,60 @@ class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {
 object PathPolicy {
     private fun walkable(id: Int) = id == 4 || id == 12
 
-    fun assess(labels: IntArray, width: Int, height: Int): PathAssessment {
+    private fun sideEvidence(
+        labels: IntArray, mask: BooleanArray, width: Int, height: Int, region: Region
+    ): SidePathEvidence {
+        val lane = if (region == Region.LEFT) 0 else 2
+        val startX = lane * width / 3
+        val endX = (lane + 1) * width / 3
+        val sampleStartY = height * 7 / 20
+        val sampleEndY = height * 7 / 10
+        val seen = BooleanArray(labels.size)
+        val queue = IntArray(labels.size)
+        var head = 0
+        var tail = 0
+        for (y in height * 3 / 4 until height) for (x in startX until endX) {
+            val i = y * width + x
+            if (mask[i] && !seen[i]) { seen[i] = true; queue[tail++] = i }
+        }
+        var reachable = 0
+        while (head < tail) {
+            val i = queue[head++]
+            val x = i % width
+            val y = i / width
+            if (y in sampleStartY..sampleEndY) reachable++
+            fun add(next: Int) {
+                if (mask[next] && !seen[next]) { seen[next] = true; queue[tail++] = next }
+            }
+            if (x > startX) add(i - 1)
+            if (x + 1 < endX) add(i + 1)
+            if (y > 0) add(i - width)
+            if (y + 1 < height) add(i + width)
+        }
+        var walls = 0
+        var wallCells = 0
+        var footing = 0
+        var footCells = 0
+        for (y in 0 until height) for (x in startX until endX) {
+            val i = y * width + x
+            if (y in height * 2 / 5 until height * 3 / 4) {
+                wallCells++
+                if (labels[i] == 1) walls++
+            }
+            if (y >= height * 3 / 4) {
+                footCells++
+                if (mask[i]) footing++
+            }
+        }
+        val sampleCells = (sampleEndY - sampleStartY + 1) * (endX - startX)
+        return SidePathEvidence(
+            reachable.toFloat() / sampleCells.coerceAtLeast(1),
+            walls.toFloat() / wallCells.coerceAtLeast(1),
+            footing.toFloat() / footCells.coerceAtLeast(1)
+        )
+    }
+
+    fun assess(labels: IntArray, width: Int, height: Int, responsive: Boolean = true): PathAssessment {
         require(width > 0 && height > 0 && labels.size == width * height)
         val walkableMask = BooleanArray(labels.size) { walkable(labels[it]) }
         val seen = BooleanArray(labels.size)
@@ -216,24 +260,32 @@ object PathPolicy {
         val wallFraction = midWall.toFloat() / midCount.coerceAtLeast(1)
         val laneCells = (sampleRows.last - sampleRows.first + 1) * width / 3f
         val centerReachable = reachableCounts[1] / laneCells
-        val leftReachable = reachableCounts[0] / laneCells
-        val rightReachable = reachableCounts[2] / laneCells
-        val forwardClear = pathContinues && centerReachable >= 0.18f &&
-            bottomFraction >= 0.20f && wallFraction < 0.25f
+        val forwardClear = pathContinues && centerReachable >= 0.15f &&
+            bottomFraction >= 0.18f && wallFraction < 0.25f
+        val strongForwardClear = forwardClear && centerReachable >= 0.32f &&
+            bottomFraction >= 0.25f && wallFraction < 0.12f
         // A named wall spanning the center or a previously visible path ending at one.
         // Absence of a path alone is ambiguous (sky, blur, covered lens, bad angle).
-        val blocked = wallFraction >= 0.55f ||
-            (bottomFraction >= 0.20f && !pathContinues && wallFraction >= 0.30f)
+        val blocked = if (responsive) {
+            wallFraction >= 0.50f ||
+                (bottomFraction >= 0.18f && !pathContinues && wallFraction >= 0.25f)
+        } else {
+            wallFraction >= 0.55f ||
+                (bottomFraction >= 0.20f && !pathContinues && wallFraction >= 0.30f)
+        }
+        val leftSide = sideEvidence(labels, walkableMask, width, height, Region.LEFT)
+        val rightSide = sideEvidence(labels, walkableMask, width, height, Region.RIGHT)
         // Only suggest a side with a connected, visible walkable corridor. An
         // unlabeled or merely plain-looking image cannot establish a route.
         val clearerSide = if (blocked) when {
-            leftReachable >= 0.22f && leftReachable >= rightReachable * 1.6f &&
-                leftReachable >= centerReachable * 1.5f -> Region.LEFT
-            rightReachable >= 0.22f && rightReachable >= leftReachable * 1.6f &&
-                rightReachable >= centerReachable * 1.5f -> Region.RIGHT
+            leftSide.reachableFraction >= 0.15f && leftSide.wallFraction < 0.35f &&
+                leftSide.reachableFraction >= rightSide.reachableFraction * 1.35f -> Region.LEFT
+            rightSide.reachableFraction >= 0.15f && rightSide.wallFraction < 0.35f &&
+                rightSide.reachableFraction >= leftSide.reachableFraction * 1.35f -> Region.RIGHT
             else -> null
         } else null
         return PathAssessment(blocked, walkableMask, width, height, wallFraction,
-            midPathFraction, pathContinues, forwardClear, clearerSide)
+            midPathFraction, pathContinues, forwardClear, strongForwardClear,
+            leftSide, rightSide, clearerSide)
     }
 }

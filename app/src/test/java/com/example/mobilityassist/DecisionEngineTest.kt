@@ -85,4 +85,21 @@ class DecisionEngineTest {
         assertFalse(gate.allow(Warning.PATH_BLOCKED, 3_000L))
         assertTrue(gate.allow(Warning.PATH_BLOCKED, 4_200L))
     }
+
+    @Test fun urgentDirectionalStopIsImmediateAndStrong() {
+        val stabilizer = GuidanceStabilizer()
+        assertEquals(Warning.STOP_LEFT, stabilizer.observe(Warning.STOP_LEFT, 0L))
+        assertTrue(Warning.STOP_LEFT.urgent)
+        val gate = WarningGate()
+        assertTrue(gate.allow(Warning.STOP_LEFT, 0L))
+        assertFalse(gate.allow(Warning.STOP_LEFT, 500L))
+    }
+
+    @Test fun aNewPathHazardIsNotDelayedByASideObjectWarning() {
+        val gate = WarningGate()
+        assertTrue(gate.allow(Warning.OBSTACLE_LEFT, 0L))
+        assertTrue(gate.allow(Warning.PATH_BLOCKED, 400L))
+        assertFalse(gate.allow(Warning.PATH_BLOCKED, 900L))
+        assertTrue(gate.allow(Warning.PATH_CLEAR, 1_200L))
+    }
 }

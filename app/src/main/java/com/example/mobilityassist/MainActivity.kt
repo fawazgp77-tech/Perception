@@ -52,7 +52,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechToggle: CheckBox
     private lateinit var feedback: SpeechHapticManager
     private val worker = Executors.newSingleThreadExecutor()
-    private val engine = DecisionEngine()
     private val stabilizer = GuidanceStabilizer()   // Analysis worker only.
     private var guidanceGeneration = -1              // Analysis worker only.
     private val metrics = PipelineMetrics()
@@ -209,7 +208,9 @@ class MainActivity : ComponentActivity() {
         // Phase 3: angle detector — callback fires on main thread
         angleDetector = AngleDetector(this) { state, guidance ->
             if (!active || destroyed || paused) return@AngleDetector
-            angleSuitable = state == AngleState.GOOD
+            // Let image evidence work while the sensor settles or the phone is rolled.
+            // Only a known up/down misalignment suppresses path claims.
+            angleSuitable = state != AngleState.TOO_HIGH && state != AngleState.TOO_LOW
             phase3State = phase3State.copy(angle = state)
             updatePhase3Ui()
             if (guidance != null) {
@@ -404,7 +405,7 @@ class MainActivity : ComponentActivity() {
                 cameraProvider.unbindAll()
                 analysis = imageAnalysis
                 frameAnalyzer.reset()
-                angleSuitable = false
+                angleSuitable = true
 
                 imageAnalysis.setAnalyzer(worker) { frame ->
                     val startedNs = SystemClock.elapsedRealtimeNanos()
@@ -435,8 +436,13 @@ class MainActivity : ComponentActivity() {
                                 null
                             }
 
+                            val conversionStartedNs = SystemClock.elapsedRealtimeNanos()
+                            val upright = ObjectDetectorHelper.prepareBitmap(frame)
+                            try {
+                            val conversionMs = (SystemClock.elapsedRealtimeNanos() - conversionStartedNs) / 1_000_000L
+                            val result = checkNotNull(detector).detectBitmap(upright, conversionMs)
                             val pathResult = try {
-                                pathSegmenter?.maybeAnalyze(frame)
+                                pathSegmenter?.maybeAnalyzeBitmap(upright)
                             } catch (error: Exception) {
                                 Log.w("MobilityAssist", "Path segmenter unavailable", error)
                                 pathSegmenter?.close()
@@ -444,23 +450,23 @@ class MainActivity : ComponentActivity() {
                                 null
                             }
 
-                            // Object boxes retain priority over tentative path guidance.
-                            val result = checkNotNull(detector).detect(frame)
-                            val objectWarning = engine.decide(result.objects)
-                            val pathWarning = PathWarningSelector.select(
-                                pathResult, result.objects,
-                                angleSuitable && frameResult?.occlusionState == OcclusionState.CLEAR
+                            val viewReliable = angleSuitable &&
+                                frameResult?.occlusionState == OcclusionState.CLEAR
+                            val candidate = CameraGuidancePlanner.decide(
+                                result.objects, pathResult, viewReliable
                             )
-                            val candidate = when {
-                                objectWarning == Warning.STOP || objectWarning == Warning.AHEAD -> objectWarning
-                                pathWarning != null -> pathWarning
-                                else -> objectWarning
-                            }
-                            // PathGuidanceTracker confirms independent model results. Do not
-                            // require more CameraX frames or count a cached mask as evidence.
-                            val warning = if (candidate == pathWarning && pathWarning != null) {
+                            // The path tracker confirms distinct model results; cached masks
+                            // never count as a second observation.
+                            val pathEvent = pathResult?.guidance != null && viewReliable &&
+                                candidate in listOf(
+                                    Warning.PATH_BLOCKED, Warning.PATH_LEFT,
+                                    Warning.PATH_RIGHT, Warning.PATH_CLEAR
+                                )
+                            val immediateDirection = candidate == Warning.AHEAD_LEFT ||
+                                candidate == Warning.AHEAD_RIGHT
+                            val warning = if (pathEvent || immediateDirection) {
                                 stabilizer.reset()
-                                pathWarning
+                                candidate
                             } else stabilizer.observe(candidate, SystemClock.elapsedRealtime())
 
                             runOnUiThread {
@@ -474,12 +480,8 @@ class MainActivity : ComponentActivity() {
                                     if (emitted) {
                                         status.text = warning!!.text
                                         lastWarningMs = nowMs
-                                        when (warning) {
-                                            Warning.PATH_BLOCKED, Warning.PATH_LEFT, Warning.PATH_RIGHT ->
-                                                pathWarningAnnounced = true
-                                            Warning.PATH_CLEAR -> pathWarningAnnounced = false
-                                            else -> Unit
-                                        }
+                                        if (warning == Warning.PATH_CLEAR) pathWarningAnnounced = false
+                                        else if (pathResult?.blocked == true) pathWarningAnnounced = true
                                     } else if (nowMs - lastWarningMs > 3_000L &&
                                         status.text != getString(R.string.scanning)
                                     ) {
@@ -512,6 +514,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            } finally { upright.recycle() }
                         }
                     } catch (error: Exception) {
                         runOnUiThread {

@@ -23,21 +23,11 @@ class ObjectDetectorHelper(context: Context) : AutoCloseable {
     data class Result(val objects: List<Obstacle>, val conversionMs: Long, val inferenceMs: Long)
 
     fun detect(frame: ImageProxy): Result {
-        // CameraX handles pixel/row strides in toBitmap(). Shared ViewPort ensures
-        // this crop matches PreviewView, including non-4:3 screens and rotation.
         val startNs = SystemClock.elapsedRealtimeNanos()
-        val raw = frame.toBitmap()
-        var upright: Bitmap? = null
+        val image = prepareBitmap(frame)
         try {
-            val crop = frame.cropRect
-            val rotation = Matrix().apply { postRotate(frame.imageInfo.rotationDegrees.toFloat()) }
-            val image = Bitmap.createBitmap(raw, crop.left, crop.top, crop.width(), crop.height(), rotation, true)
-            upright = image
             return detectBitmap(image, (SystemClock.elapsedRealtimeNanos() - startNs) / 1_000_000L)
-        } finally {
-            if (upright !== raw) upright?.recycle()
-            raw.recycle()
-        }
+        } finally { image.recycle() }
     }
 
     /** Caller owns the upright bitmap, allowing ARCore's camera path to reuse this detector. */
@@ -63,5 +53,24 @@ class ObjectDetectorHelper(context: Context) : AutoCloseable {
     }
 
     override fun close() = detector.close()
-    companion object { const val MODEL_NAME = "efficientdet_lite0.tflite" }
+    companion object {
+        const val MODEL_NAME = "efficientdet_lite0.tflite"
+
+        /** Shared visible crop for detector and path model; caller must recycle. */
+        fun prepareBitmap(frame: ImageProxy): Bitmap {
+            val raw = frame.toBitmap()
+            try {
+                val crop = frame.cropRect
+                val rotation = Matrix().apply { postRotate(frame.imageInfo.rotationDegrees.toFloat()) }
+                val upright = Bitmap.createBitmap(
+                    raw, crop.left, crop.top, crop.width(), crop.height(), rotation, true
+                )
+                if (upright !== raw) raw.recycle()
+                return upright
+            } catch (error: Exception) {
+                raw.recycle()
+                throw error
+            }
+        }
+    }
 }
