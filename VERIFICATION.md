@@ -1,10 +1,126 @@
-# Verification — 2026-10-09
+# Verification — Mobility Assist
 
-- **Current build:** Phase 2 `build.ps1 testDebugUnitTest assembleDebug lintDebug` completed with `BUILD SUCCESSFUL` using the project-local JDK 17 and Android SDK. The APK is [`app/build/outputs/apk/debug/app-debug.apk`](app/build/outputs/apk/debug/app-debug.apk), versionCode 2, versionName `2.0-demo`, 54,361,598 bytes, SHA-256 `d8b137c10d8baf7f147d430dfec4b17981c89f3656fd905880c924e629bccf04`.
-- **Unit tests:** 7 tests, 0 failures or errors: 6 `DecisionEngineTest` cases and 1 `PipelineMetricsTest` case. The new tests cover wide-box center overlap and two-frame confirmation as well as the earlier priority and cooldown rules.
-- **Android Lint:** 0 errors, 8 warnings. Report: [`app/build/reports/lint-results-debug.html`](app/build/reports/lint-results-debug.html).
-- **Package checks:** Direct `apksigner.jar verify` passed. `aapt dump permissions` shows camera, vibration, and an AndroidX internal receiver permission; no Internet or network-state permission. Minimum SDK is 26, target SDK is 34.
-- **Preserved Phase 1:** The locally saved `mobility-assist-phase1-debug.apk` was 54,334,486 bytes with SHA-256 `13ae5989c1036cec0ca248af20443e9b35df854a41e97dd44c9fcec3d49d162e`. Debug APKs are excluded from Git. The matching [source zip](releases/phase1/phase1-source.zip) has 29 project-relative entries and can be rebuilt in a separate directory. Use the [Phase 1 checklist](DEVICE_TEST_CHECKLIST.md) with that build, not the current Phase 2 APK.
-- **Device validation pending:** The user will test Phase 1 on a physical phone later. Neither phase has been verified on a phone in this session. Live box alignment, detection quality, speech, vibration, TalkBack, offline operation, and sustained latency remain unmeasured. The center-overlap and two-frame thresholds are heuristics, not validated safety behavior.
+---
 
-After the saved Phase 1 test, use the [Phase 2 checklist](PHASE2_TEST_CHECKLIST.md) to compare the new guidance on the same phone. Do not treat either APK as a validated mobility aid.
+## Phase 1 — Build and automated testing (2026-10-08)
+
+- **Build:** `build.ps1 testDebugUnitTest assembleDebug lintDebug` completed with `BUILD SUCCESSFUL` using the project-local Temurin JDK 17, Android SDK Platform 35, and Build Tools 35.
+- **Unit tests:** 5 tests, 0 failures or errors: 4 `DecisionEngineTest` cases and 1 `PipelineMetricsTest` case.
+- **Android Lint:** 0 errors, 8 warnings. Report: `app/build/reports/lint-results-debug.html`.
+- **APK:** `app/build/outputs/apk/debug/app-debug.apk`, 54,334,486 bytes. SHA-256: `13ae5989c1036cec0ca248af20443e9b35df854a41e97dd44c9fcec3d49d162e`. `apksigner verify` passed. `aapt dump permissions` shows camera, vibration, and an AndroidX internal receiver permission; no Internet or network-state permission packaged.
+- **Phase 1 source archive:** preserved at `releases/phase1/phase1-source.zip`.
+
+---
+
+## Phase 1 — Physical device testing
+
+Phase 1 and Phase 2 checklists were manually completed on physical phones by the project owner. Individual item-level results are partially recorded:
+
+**Items recorded as pass** (`releases/phase1/DEVICE_TEST_CHECKLIST.md`):
+- Item 1: Fresh launch, grant camera permission — **pass**
+- Item 2: Deny permission, retry — **PASS**
+- Item 3: Permanently deny permission — **pass**
+- Item 4: Person in left/center/right thirds — **pass**
+- Item 5: Car, bus, truck, bicycle, motorcycle, dog — **Pass**
+- Item 7: Medium center detection — **pass**
+- Item 8: Large center detection (STOP) — **pass**
+- Item 9: Left-only, right-only, both-side detections — **pass**
+
+**Items still Pending** (no result recorded):
+- Item 6: Nine-position box alignment + rotation
+- Item 10: 10-second hold / frame backlog check
+- Item 11: Nonurgent then STOP interruption
+- Item 12: Pause/resume/Home/rotation/lock
+- Item 13: Airplane mode offline operation
+- Item 14: TalkBack/headphones/audio
+- Item 15: 30-minute sustained run
+
+**Supporting evidence:** Individual timestamps, device models, and Android version numbers were not recorded in the repository. The above pass/fail entries are the complete available record.
+
+---
+
+## Phase 2 — Build and automated testing (2026-10-09)
+
+- **Build:** `build.ps1 testDebugUnitTest assembleDebug lintDebug` completed with `BUILD SUCCESSFUL`.
+- **Unit tests:** 7 tests, 0 failures or errors: 6 `DecisionEngineTest` cases and 1 `PipelineMetricsTest` case. New tests cover wide-box center overlap and two-frame confirmation.
+- **Android Lint:** 0 errors, 8 warnings. Report: `app/build/reports/lint-results-debug.html`.
+- **APK:** `app/build/outputs/apk/debug/app-debug.apk`, 54,361,598 bytes, versionCode 2, versionName `2.0-demo`. SHA-256: `d8b137c10d8baf7f147d430dfec4b17981c89f3656fd905880c924e629bccf04`. `apksigner verify` passed. No Internet or network-state permission packaged.
+
+---
+
+## Phase 2 — Physical device testing
+
+All 10 items in `PHASE2_TEST_CHECKLIST.md` remain **Pending**. No physical-device test has been recorded for Phase 2.
+
+Outstanding Phase 2 items include:
+- Camera timestamp clock-source verification (diagnostic candidate only until verified)
+- Controlled-scene evaluation (10 examples per class across three regions and two lighting conditions)
+- Two-frame confirmation and wide-box center-overlap behaviour on a real scene
+- Threshold tuning based on measured device results
+- Formal demo sign-off
+
+---
+
+## Phase 3 — Implementation status (2026-10-11)
+
+### Code complete
+
+| File | Status |
+|---|---|
+| `app/src/main/java/com/example/mobilityassist/Phase3State.kt` | Created |
+| `app/src/main/java/com/example/mobilityassist/FrameAnalyzer.kt` | Created |
+| `app/src/main/java/com/example/mobilityassist/AngleDetector.kt` | Created |
+| `app/src/main/java/com/example/mobilityassist/SpeechHapticManager.kt` | Extended (`speak()`, `Phase3SpeechGate`, `SpeechPriority`); `warn()` unchanged |
+| `app/src/main/java/com/example/mobilityassist/MainActivity.kt` | Extended (Camera ref, FrameAnalyzer, AngleDetector, torch control, Phase 3 UI) |
+| `app/src/main/res/layout/activity_main.xml` | Updated (Phase 3 compact status row) |
+| `app/src/main/res/values/strings.xml` | Updated (Phase 3 strings added) |
+| `app/src/test/java/com/example/mobilityassist/Phase3SpeechTest.kt` | Created (11 tests) |
+| `app/src/test/java/com/example/mobilityassist/FrameAnalyzerTest.kt` | Created (22 tests) |
+| `app/src/test/java/com/example/mobilityassist/AngleDetectorTest.kt` | Created (24 tests) |
+| `docs/PHASE_3_IMPLEMENTATION_PLAN.md` | Created |
+| `docs/PHASE_3_CHECKLIST.md` | Created |
+| `docs/PHASE_3_TEST_REPORT.md` | Created |
+| `phase_3plan.md` | Created (root copy) |
+
+Untouched files (Phase 3 policy): `DecisionEngine.kt`, `ObjectDetectorHelper.kt`, `OverlayView.kt`, `PipelineMetrics.kt`, `DecisionEngineTest.kt`, `PipelineMetricsTest.kt`, `AndroidManifest.xml`, `build.gradle.kts`.
+
+### Automated test results (Phase 3 build) — 2026-10-11
+
+**BUILD SUCCESSFUL** — `gradlew.bat testDebugUnitTest assembleDebug` completed with JDK 21 (Android Studio JBR) and Android SDK Platform 35 / Build Tools 35.
+
+- **Unit tests: 69 tests, 0 failures, 0 errors.**
+  - `DecisionEngineTest`: 6 tests — all pass (existing, no regression)
+  - `PipelineMetricsTest`: 1 test — pass (existing, no regression)
+  - `Phase3SpeechTest`: 11 tests — all pass (new)
+  - `FrameAnalyzerTest`: 27 tests — all pass (new; 2 tests required a fix to `alternatingBuffer` helper after discovering that stride-8 sampling of a pixel-alternating checkerboard pattern produced zero variance; corrected to use sample-grid coordinates)
+  - `AngleDetectorTest`: 24 tests — all pass (new)
+- **APK:** `app/build/outputs/apk/debug/app-debug.apk`, **54,113,465 bytes (51.61 MB)**, generated 2026-10-11.
+- **Note on test count:** Final count is 69, not 64 as estimated, because `FrameAnalyzerTest` grew to 27 tests during implementation.
+- **Build environment:** JDK 21.0.6 (Android Studio JBR), Android SDK Platform 35, Build Tools 35.0.0, Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21.
+- **`gradle.properties` updated** with `org.gradle.java.home` pointing to Android Studio JBR to avoid Java 8 system JVM conflict.
+- **`local.properties` updated** with correct `sdk.dir` path.
+
+### Phase 3 physical-device testing
+
+**NOT TESTED.** See `docs/PHASE_3_CHECKLIST.md` Sections 2–8 and `docs/PHASE_3_TEST_REPORT.md` for the full test matrix and session record template.
+
+---
+
+## Outstanding items across all phases
+
+| Item | Phase | Priority | Status |
+|---|---|---|---|
+| Phase 3 build and automated tests | 3 | P0 | Pending (task 13) |
+| Phase 3 device test — flashlight matrix | 3 | P0 | Pending — requires physical device |
+| Phase 3 device test — angle guidance matrix | 3 | P0 | Pending — requires physical device |
+| Phase 3 device test — obstruction matrix | 3 | P0 | Pending — requires physical device |
+| Phase 3 speech priority matrix | 3 | P0 | Pending — requires physical device |
+| Phase 3 performance baseline | 3 | P1 | Pending — requires physical device |
+| Phase 2 controlled-scene evaluation | 2 | P0 | Carry-over — requires physical device |
+| Phase 2 full device checklist | 2 | P0 | Carry-over — all 10 items pending |
+| Phase 1 remaining items (6, 10–15) | 1 | P1 | Carry-over — requires physical device |
+| Camera timestamp clock-source verification | 1/2 | P1 | Carry-over |
+| Second-device coverage | 3 | P2 | Pending primary device completion |
+| Formal demo sign-off | 3 | P0 | Blocked on all above |
+
+**No phase has been formally demo-approved.** Physical device testing and a dated test record are required before any supervised demo may be authorised.

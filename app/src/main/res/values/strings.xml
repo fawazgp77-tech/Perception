@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App identity -->
     <string name="app_name">Mobility Assist</string>
-    <string name="screen_title">Mobility Assist · Phase 2 demo</string>
+    <string name="screen_title">Mobility Assist · Phase 3 demo</string>
+
+    <!-- Existing Phase 1/2 strings — unchanged -->
     <string name="starting_detector">Starting detector…</string>
     <string name="starting_speech">Starting offline speech…</string>
     <string name="speech_ready">Offline voice ready</string>
@@ -21,4 +24,40 @@
     <string name="camera_unavailable">Camera unavailable. Tap Retry.</string>
     <string name="size_note">Box size is only a rough proximity estimate. No warning does not mean a clear path. Keep using your usual mobility aid.</string>
     <string name="diagnostics_format">%1$.1f analyzed fps · p95 %2$d ms analysis-to-display · %3$d ms conversion · %4$d ms inference</string>
+
+    <!-- Phase 3 onboarding -->
+    <string name="phase3_onboarding">Phase 3: auto flashlight, angle guidance, and obstruction detection active.</string>
+
+    <!-- Phase 3 TTS phrases -->
+    <string name="speech_low_light">Too dark. Turning on flashlight.</string>
+    <string name="speech_flashlight_on">Flashlight is on.</string>
+    <string name="speech_flashlight_off">Lighting improved. Turning off flashlight.</string>
+    <string name="speech_flashlight_unavailable">Flashlight unavailable on this device.</string>
+    <string name="speech_flashlight_error">Unable to activate flashlight.</string>
+    <string name="speech_camera_covered">Camera covered. Please move your hand.</string>
+    <string name="speech_camera_restored">Camera view restored.</string>
+
+    <!-- Phase 3 status row: lighting and flashlight -->
+    <string name="status_lighting_normal">LIGHTING: NORMAL</string>
+    <string name="status_low_light">LIGHTING: LOW LIGHT</string>
+    <string name="status_flashlight_on">FLASHLIGHT: ON</string>
+    <string name="status_flashlight_off">FLASHLIGHT: OFF</string>
+    <string name="status_flashlight_unavailable">FLASHLIGHT: N/A</string>
+    <string name="status_flashlight_error">FLASHLIGHT: ERROR</string>
+
+    <!-- Phase 3 status row: angle -->
+    <string name="status_angle_good">ANGLE: GOOD</string>
+    <string name="status_angle_too_high">ANGLE: TOO HIGH</string>
+    <string name="status_angle_too_low">ANGLE: TOO LOW</string>
+    <string name="status_angle_left">ANGLE: TILT LEFT</string>
+    <string name="status_angle_right">ANGLE: TILT RIGHT</string>
+    <string name="status_angle_adjusting">ANGLE: ADJUSTING</string>
+    <string name="status_angle_unavailable">ANGLE: N/A</string>
+
+    <!-- Phase 3 status row: camera and occlusion -->
+    <string name="status_camera_clear">CAMERA: CLEAR</string>
+    <string name="status_camera_check">CAMERA: CHECK VIEW</string>
+    <string name="status_camera_blocked">CAMERA: BLOCKED</string>
+    <string name="status_camera_recovering">CAMERA: RECOVERING</string>
+    <string name="status_camera_unavailable">CAMERA: N/A</string>
 </resources>
