@@ -30,6 +30,7 @@ data class Obstacle(val label: String, val score: Float,
 enum class Warning(val text: String, val urgent: Boolean = false) {
     STOP("Stop. Obstacle ahead.", true),
     AHEAD("Obstacle ahead."),
+    POSSIBLE_WALL("Possible wall ahead."),
     OBSTACLE_LEFT("Obstacle on left."),
     OBSTACLE_RIGHT("Obstacle on right."),
     BOTH_SIDES("Obstacles on both sides.")
@@ -80,11 +81,16 @@ class GuidanceStabilizer(private val requiredFrames: Int = 2, private val maxGap
 
 // Per-warning cooldown plus a global quiet period prevents alternating speech.
 // A newly urgent STOP can interrupt a lower-priority warning immediately.
-class WarningGate(private val cooldownMs: Long = 2_000) {
+class WarningGate(private val cooldownMs: Long = 6_000) {
     private val times = mutableMapOf<Warning, Long>()
     private var lastTime: Long? = null
     fun allow(warning: Warning, nowMs: Long): Boolean {
-        if (times[warning]?.let { nowMs - it < cooldownMs } == true) return false
+        val perWarningCooldown = when (warning) {
+            Warning.STOP -> 4_000L
+            Warning.POSSIBLE_WALL -> 15_000L
+            else -> cooldownMs
+        }
+        if (times[warning]?.let { nowMs - it < perWarningCooldown } == true) return false
         if (!warning.urgent && lastTime?.let { nowMs - it < cooldownMs } == true) return false
         times[warning] = nowMs
         lastTime = nowMs

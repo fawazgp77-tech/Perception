@@ -18,7 +18,6 @@ class ObjectDetectorHelper(context: Context) : AutoCloseable {
             .setRunningMode(RunningMode.IMAGE)
             .setScoreThreshold(0.45f)
             .setMaxResults(10)
-            .setCategoryAllowlist(listOf("person", "car", "bus", "truck", "bicycle", "motorcycle", "dog"))
             .build())
 
     data class Result(val objects: List<Obstacle>, val conversionMs: Long, val inferenceMs: Long)

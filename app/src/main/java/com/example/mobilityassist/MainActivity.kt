@@ -1,6 +1,9 @@
 package com.example.mobilityassist
 
 import android.Manifest
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -8,10 +11,15 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
+import android.view.View
 import android.view.Surface
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.EditText
+import android.widget.CheckBox
 import android.widget.TextView
+import android.widget.Toast
+import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
@@ -38,6 +46,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var status: TextView
     private lateinit var diagnostics: TextView
     private lateinit var toggle: Button
+    private lateinit var menuPanel: View
+    private lateinit var scannerPanel: View
+    private lateinit var destinationInput: EditText
+    private lateinit var speechToggle: CheckBox
     private lateinit var feedback: SpeechHapticManager
     private val worker = Executors.newSingleThreadExecutor()
     private val engine = DecisionEngine()
@@ -46,11 +58,14 @@ class MainActivity : ComponentActivity() {
     private val metrics = PipelineMetrics()
     private val generation = AtomicInteger()
     private var detector: ObjectDetectorHelper? = null  // Worker thread only.
+    private var sceneLabeler: SceneLabeler? = null // Worker thread only.
+    @Volatile private var wallUntilMs = 0L
     private var provider: ProcessCameraProvider? = null
     private var analysis: ImageAnalysis? = null
     @Volatile private var active = false
     @Volatile private var destroyed = false
     private var paused = false
+    private var scanningEnabled = false
     private var initialized = false
     private var failed = false
     private var permissionBlocked = false
@@ -72,7 +87,8 @@ class MainActivity : ComponentActivity() {
     @Volatile private var camera: Camera? = null
 
     /** Whether the torch is currently commanded on. Main thread only. */
-    private var torchIsOn = false
+    @Volatile private var torchIsOn = false
+    private var torchPending = false
 
     /** Whether the active camera has a flash unit. Set after bindCamera() returns. */
     private var hasFlash = false
@@ -115,6 +131,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val destinationSpeech = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val recognized = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()?.trim().orEmpty()
+            if (recognized.isNotBlank()) {
+                destinationInput.setText(recognized)
+                destinationInput.setSelection(recognized.length)
+                feedback.speak(recognized, SpeechPriority.IMPORTANT, "destination_readback", 0L)
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // onCreate
     // -----------------------------------------------------------------------
@@ -127,6 +158,10 @@ class MainActivity : ComponentActivity() {
         status         = findViewById(R.id.status)
         diagnostics    = findViewById(R.id.diagnostics)
         toggle         = findViewById(R.id.toggle)
+        menuPanel      = findViewById(R.id.menuPanel)
+        scannerPanel   = findViewById(R.id.scannerPanel)
+        destinationInput = findViewById(R.id.destinationInput)
+        speechToggle   = findViewById(R.id.speechToggle)
         lightingStatus = findViewById(R.id.lightingStatus)
         angleStatus    = findViewById(R.id.angleStatus)
         cameraStatus   = findViewById(R.id.cameraStatus)
@@ -136,6 +171,35 @@ class MainActivity : ComponentActivity() {
 
         feedback = SpeechHapticManager(this) {
             findViewById<TextView>(R.id.speechStatus).text = it
+            findViewById<TextView>(R.id.menuSpeechStatus).text = it
+        }
+        val preferences = getSharedPreferences("mobility_assist", MODE_PRIVATE)
+        speechToggle.isChecked = preferences.getBoolean("speech_enabled", true)
+        feedback.setSpeechEnabled(speechToggle.isChecked)
+        speechToggle.setOnCheckedChangeListener { _, checked ->
+            preferences.edit().putBoolean("speech_enabled", checked).apply()
+            feedback.setSpeechEnabled(checked)
+        }
+        findViewById<Button>(R.id.startAssistance).setOnClickListener { showScanner() }
+        findViewById<Button>(R.id.backToMenu).setOnClickListener { showMenu() }
+        findViewById<Button>(R.id.speakDestination).setOnClickListener { requestDestinationSpeech() }
+        findViewById<Button>(R.id.previewWalkingRoute).setOnClickListener {
+            confirmWalkingRoute(destinationInput.text.toString())
+        }
+        findViewById<Button>(R.id.saveHome).setOnClickListener {
+            val home = destinationInput.text.toString().trim()
+            if (home.isBlank()) Toast.makeText(this, R.string.destination_missing, Toast.LENGTH_SHORT).show()
+            else {
+                preferences.edit().putString("home_address", home).apply()
+                Toast.makeText(this, R.string.home_saved, Toast.LENGTH_SHORT).show()
+                feedback.speak(getString(R.string.home_saved), SpeechPriority.IMPORTANT,
+                    "home_saved", 0L)
+            }
+        }
+        findViewById<Button>(R.id.navigateHome).setOnClickListener {
+            val home = preferences.getString("home_address", null)
+            if (home.isNullOrBlank()) Toast.makeText(this, R.string.home_missing, Toast.LENGTH_SHORT).show()
+            else confirmWalkingRoute(home)
         }
 
         // Phase 3: angle detector — callback fires on main thread
@@ -147,8 +211,8 @@ class MainActivity : ComponentActivity() {
                 feedback.speak(
                     text         = guidance,
                     priority     = SpeechPriority.INFORMATIONAL,
-                    cooldownKey  = "angle_${state.name}",
-                    cooldownMs   = 4_000L
+                    cooldownKey  = "angle_guidance",
+                    cooldownMs   = 20_000L
                 )
             }
         }
@@ -182,8 +246,8 @@ class MainActivity : ComponentActivity() {
                     updateButton()
                     if (paused) {
                         analysis?.clearAnalyzer()
-                        provider?.unbindAll()
                         safeTorchOff()
+                        provider?.unbindAll()
                         frameAnalyzer.reset()
                         angleDetector.unregister()
                         resetPhase3StateToIdle()
@@ -199,12 +263,18 @@ class MainActivity : ComponentActivity() {
         worker.execute {
             try {
                 detector = ObjectDetectorHelper(applicationContext)
+                sceneLabeler = try { SceneLabeler() } catch (error: Exception) {
+                    Log.w("MobilityAssist", "Optional wall labeler unavailable", error)
+                    null
+                }
                 runOnUiThread {
                     if (!destroyed) {
                         initialized = true
                         if (paused) status.setText(R.string.assistance_paused)
-                        if (hasCameraPermission()) preview.post { bindCamera() }
-                        else permission.launch(Manifest.permission.CAMERA)
+                        if (scanningEnabled) {
+                            if (hasCameraPermission()) preview.post { bindCamera() }
+                            else permission.launch(Manifest.permission.CAMERA)
+                        }
                     }
                 }
             } catch (error: Exception) {
@@ -213,11 +283,80 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showScanner() {
+        menuPanel.visibility = View.GONE
+        scannerPanel.visibility = View.VISIBLE
+        scanningEnabled = true
+        paused = false
+        updateButton()
+        if (initialized) {
+            if (hasCameraPermission()) preview.post { bindCamera() }
+            else permission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun showMenu() {
+        scanningEnabled = false
+        wallUntilMs = 0L
+        generation.incrementAndGet()
+        analysis?.clearAnalyzer()
+        safeTorchOff()
+        provider?.unbindAll()
+        camera = null
+        angleDetector.unregister()
+        frameAnalyzer.reset()
+        feedback.stop()
+        overlay.show(emptyList())
+        resetPhase3StateToIdle()
+        scannerPanel.visibility = View.GONE
+        menuPanel.visibility = View.VISIBLE
+    }
+
+    private fun requestDestinationSpeech() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.destination_hint))
+        }
+        try {
+            destinationSpeech.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.voice_input_unavailable, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun confirmWalkingRoute(rawDestination: String) {
+        val destination = rawDestination.trim()
+        if (destination.isBlank()) {
+            Toast.makeText(this, R.string.destination_missing, Toast.LENGTH_SHORT).show()
+            return
+        }
+        feedback.speak(getString(R.string.route_confirmation, destination),
+            SpeechPriority.IMPORTANT, "route_destination", 0L)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.preview_walking_route)
+            .setMessage(getString(R.string.route_confirmation, destination))
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.open_maps) { _, _ ->
+                // Maps displays walking ETA and asks for its own final Start action.
+                val uri = Uri.parse(WalkingRouteUrl.forDestination(destination))
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps"))
+                } catch (_: ActivityNotFoundException) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    } catch (_: ActivityNotFoundException) {
+                        Toast.makeText(this, R.string.maps_unavailable, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .show()
+    }
+
     // -----------------------------------------------------------------------
     // Camera binding
     // -----------------------------------------------------------------------
     private fun bindCamera() {
-        if (destroyed || !active || paused || !initialized || failed || !hasCameraPermission()) return
+        if (destroyed || !active || !scanningEnabled || paused || !initialized || failed || !hasCameraPermission()) return
         val token = generation.incrementAndGet()
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
@@ -255,6 +394,7 @@ class MainActivity : ComponentActivity() {
                 cameraProvider.unbindAll()
                 analysis = imageAnalysis
                 frameAnalyzer.reset()
+                wallUntilMs = 0L
 
                 imageAnalysis.setAnalyzer(worker) { frame ->
                     val startedNs = SystemClock.elapsedRealtimeNanos()
@@ -284,10 +424,27 @@ class MainActivity : ComponentActivity() {
                                 null
                             }
 
-                            // Existing obstacle detection — unchanged
+                            try {
+                                sceneLabeler?.maybeAnalyze(frame) { confirmed ->
+                                    if (token == generation.get() && active && scanningEnabled) {
+                                        wallUntilMs = if (confirmed)
+                                            SystemClock.elapsedRealtime() + 4_000L else 0L
+                                    }
+                                }
+                            } catch (error: Exception) {
+                                Log.w("MobilityAssist", "Scene labeler unavailable", error)
+                            }
+
+                            // Object boxes retain priority over the tentative wall label.
                             val result = checkNotNull(detector).detect(frame)
+                            val objectWarning = engine.decide(result.objects)
+                            val candidate = when {
+                                objectWarning == Warning.STOP || objectWarning == Warning.AHEAD -> objectWarning
+                                SystemClock.elapsedRealtime() < wallUntilMs -> Warning.POSSIBLE_WALL
+                                else -> objectWarning
+                            }
                             val warning = stabilizer.observe(
-                                engine.decide(result.objects),
+                                candidate,
                                 SystemClock.elapsedRealtime()
                             )
 
@@ -475,16 +632,28 @@ class MainActivity : ComponentActivity() {
     // Torch control helpers
     // -----------------------------------------------------------------------
     private fun activateTorch() {
-        if (!hasFlash || torchIsOn) return
+        if (!hasFlash || torchIsOn || torchPending) return
         val cam = camera ?: run {
             phase3State = phase3State.copy(lighting = LightingState.ERROR)
             updatePhase3Ui()
             return
         }
-        cam.cameraControl.enableTorch(true).addListener(
+        torchPending = true
+        val token = generation.get()
+        val future = cam.cameraControl.enableTorch(true)
+        future.addListener(
             {
                 runOnUiThread {
-                    if (!active || destroyed) return@runOnUiThread
+                    if (!active || destroyed || !scanningEnabled || token != generation.get()) return@runOnUiThread
+                    torchPending = false
+                    try { future.get() } catch (error: Exception) {
+                        Log.w("MobilityAssist", "Torch activation failed", error)
+                        phase3State = phase3State.copy(lighting = LightingState.ERROR)
+                        updatePhase3Ui()
+                        feedback.speak(getString(R.string.speech_flashlight_error),
+                            SpeechPriority.IMPORTANT, "flashlight_error", 20_000L)
+                        return@runOnUiThread
+                    }
                     torchIsOn = true
                     frameAnalyzer.onTorchStateChanged()
                     frameAnalyzer.setLightingState(LightingState.FLASHLIGHT_ON)
@@ -503,12 +672,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun deactivateTorch() {
-        if (!torchIsOn) return
+        if (!torchIsOn || torchPending) return
         val cam = camera ?: return
-        cam.cameraControl.enableTorch(false).addListener(
+        torchPending = true
+        val token = generation.get()
+        val future = cam.cameraControl.enableTorch(false)
+        future.addListener(
             {
                 runOnUiThread {
-                    if (!active || destroyed) return@runOnUiThread
+                    if (!active || destroyed || !scanningEnabled || token != generation.get()) return@runOnUiThread
+                    torchPending = false
+                    try { future.get() } catch (error: Exception) {
+                        Log.w("MobilityAssist", "Torch deactivation failed", error)
+                        phase3State = phase3State.copy(lighting = LightingState.ERROR)
+                        updatePhase3Ui()
+                        return@runOnUiThread
+                    }
                     torchIsOn = false
                     frameAnalyzer.onTorchStateChanged()
                     frameAnalyzer.setLightingState(LightingState.NORMAL)
@@ -532,7 +711,9 @@ class MainActivity : ComponentActivity() {
      * be unbound (exception swallowed).
      */
     private fun safeTorchOff() {
-        if (!torchIsOn) return
+        val wasOnOrPending = torchIsOn || torchPending
+        torchPending = false
+        if (!wasOnOrPending) return
         try {
             camera?.cameraControl?.enableTorch(false)
         } catch (e: Exception) {
@@ -624,12 +805,13 @@ class MainActivity : ComponentActivity() {
         failed = true
         generation.incrementAndGet()
         analysis?.clearAnalyzer()
-        provider?.unbindAll()
         safeTorchOff()
+        provider?.unbindAll()
         feedback.stop()
         overlay.show(emptyList())
         status.text = message
         status.announceForAccessibility(message)
+        if (!scanningEnabled) Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         updateButton()
     }
 
@@ -657,7 +839,7 @@ class MainActivity : ComponentActivity() {
             permissionBlocked = false
             updateButton()
         }
-        preview.post { bindCamera() }
+        if (scanningEnabled) preview.post { bindCamera() }
     }
 
     override fun onResume() {
@@ -671,10 +853,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         active = false
+        wallUntilMs = 0L
         generation.incrementAndGet()
         analysis?.clearAnalyzer()
-        provider?.unbindAll()
         safeTorchOff()
+        provider?.unbindAll()
         camera = null                  // Phase 3: null ref so no stale enableTorch calls
         angleDetector.unregister()     // Phase 3: unregister sensors
         frameAnalyzer.reset()          // Phase 3: clear brightness/occlusion state
@@ -696,7 +879,10 @@ class MainActivity : ComponentActivity() {
         analysis?.clearAnalyzer()
         feedback.close()
         // Queued after any in-flight inference; never closes detector mid-call.
-        worker.execute { detector?.close(); detector = null }
+        worker.execute {
+            detector?.close(); detector = null
+            sceneLabeler?.close(); sceneLabeler = null
+        }
         worker.shutdown()
         super.onDestroy()
     }

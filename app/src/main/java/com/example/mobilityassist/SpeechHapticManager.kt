@@ -26,6 +26,8 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
     private val appContext = context.applicationContext
     private var ready = false
     private var closed = false
+    private var speechEnabled = true
+    private var lastObstacleSpeechMs = Long.MIN_VALUE
 
     // -----------------------------------------------------------------------
     // Existing obstacle gate — used EXCLUSIVELY by warn(Warning).
@@ -63,9 +65,10 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
     // -----------------------------------------------------------------------
     fun warn(warning: Warning): Boolean {
         if (closed || !gate.allow(warning, SystemClock.elapsedRealtime())) return false
-        if (ready && tts?.speak(warning.text, TextToSpeech.QUEUE_FLUSH, null, warning.name) == TextToSpeech.ERROR) {
+        if (ready && speechEnabled && tts?.speak(warning.text, TextToSpeech.QUEUE_FLUSH, null, warning.name) == TextToSpeech.ERROR) {
             onStatus(appContext.getString(R.string.speech_failed))
         }
+        lastObstacleSpeechMs = SystemClock.elapsedRealtime()
         if (vibrator?.hasVibrator() == true) {
             val effect = if (warning.urgent) VibrationEffect.createWaveform(
                 longArrayOf(0, 300, 100, 300), intArrayOf(0, 255, 0, 255), -1)
@@ -94,10 +97,14 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
         cooldownKey: String,
         cooldownMs: Long
     ): Boolean {
-        if (closed || !ready) return false
-        if (!phase3Gate.allow(cooldownKey, cooldownMs, SystemClock.elapsedRealtime())) return false
-        val queueMode = if (priority == SpeechPriority.URGENT) TextToSpeech.QUEUE_FLUSH
-                        else TextToSpeech.QUEUE_ADD
+        if (closed || !ready || !speechEnabled) return false
+        val now = SystemClock.elapsedRealtime()
+        if (priority != SpeechPriority.URGENT &&
+            now - lastObstacleSpeechMs in 0..5_999L) return false
+        if (!phase3Gate.allow(cooldownKey, cooldownMs, now)) return false
+        val recentObstacle = now - lastObstacleSpeechMs in 0..2_999L
+        val queueMode = if (priority == SpeechPriority.URGENT && !recentObstacle)
+            TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         val result = tts?.speak(text, queueMode, null, "p3_$cooldownKey")
         if (result == TextToSpeech.ERROR) {
             onStatus(appContext.getString(R.string.speech_failed))
@@ -109,7 +116,12 @@ class SpeechHapticManager(context: Context, private val onStatus: (String) -> Un
     /** Reset the Phase 3 cooldown map — call on stop/pause so stale cooldowns don't suppress fresh messages. */
     fun resetPhase3Gate() { phase3Gate.reset() }
 
-    fun stop() { tts?.stop(); vibrator?.cancel(); gate.reset(); phase3Gate.reset() }
+    fun setSpeechEnabled(enabled: Boolean) {
+        speechEnabled = enabled
+        if (!enabled) tts?.stop()
+    }
+
+    fun stop() { tts?.stop(); vibrator?.cancel(); gate.reset(); phase3Gate.reset(); lastObstacleSpeechMs = Long.MIN_VALUE }
     fun close() { closed = true; stop(); tts?.shutdown(); tts = null }
 }
 

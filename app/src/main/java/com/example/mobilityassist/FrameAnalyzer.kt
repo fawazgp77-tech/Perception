@@ -69,6 +69,11 @@ class FrameAnalyzer {
          * will have variance > this value → not flagged as obstruction.
          */
         const val OCCLUSION_VARIANCE_THRESHOLD = 5.0f
+        /** A close hand can be bright; look for an abrupt loss of detail as well as darkness. */
+        const val COVER_TILE_VARIANCE = 45f
+        const val COVER_BASELINE_VARIANCE = 100f
+        const val COVER_BRIGHTNESS_CHANGE = 25f
+        const val TILE_GRID = 4
 
         /** Consecutive occlusion-candidate frames to reach POSSIBLY_OBSTRUCTED. */
         const val OCCLUSION_POSSIBLE_FRAMES = 3
@@ -94,6 +99,9 @@ class FrameAnalyzer {
 
     private var currentLightingState = LightingState.NORMAL
     private var currentOcclusionState = OcclusionState.CLEAR
+    private val baselineMean = FloatArray(TILE_GRID * TILE_GRID)
+    private val baselineVariance = FloatArray(TILE_GRID * TILE_GRID)
+    private var baselineReady = false
 
     // -----------------------------------------------------------------------
     // Public API
@@ -105,7 +113,7 @@ class FrameAnalyzer {
      * adjustment that follows a torch toggle is not misread as a brightness
      * change.
      */
-    fun onTorchStateChanged() {
+    @Synchronized fun onTorchStateChanged() {
         settleFramesRemaining = EXPOSURE_SETTLE_FRAMES
     }
 
@@ -113,7 +121,7 @@ class FrameAnalyzer {
      * Reset all state. Call when the camera session restarts, the app is
      * paused/resumed, or analysis is stopped.
      */
-    fun reset() {
+    @Synchronized fun reset() {
         darkFrameCount = 0
         brightFrameCount = 0
         occlusionCandidateCount = 0
@@ -121,6 +129,7 @@ class FrameAnalyzer {
         settleFramesRemaining = 0
         currentLightingState = LightingState.NORMAL
         currentOcclusionState = OcclusionState.CLEAR
+        baselineReady = false
     }
 
     /**
@@ -139,7 +148,7 @@ class FrameAnalyzer {
      *                   the returned states to drive torch control.
      * @return [FrameAnalysis] with updated states, or null if the buffer is invalid.
      */
-    fun analyze(
+    @Synchronized fun analyze(
         buffer: ByteBuffer,
         width: Int,
         height: Int,
@@ -172,6 +181,9 @@ class FrameAnalyzer {
         var sum = 0L
         var sumSq = 0L
         var count = 0
+        val tileSum = LongArray(TILE_GRID * TILE_GRID)
+        val tileSumSq = LongArray(TILE_GRID * TILE_GRID)
+        val tileCount = IntArray(TILE_GRID * TILE_GRID)
 
         var rowByteStart = 0
         var row = 0
@@ -184,6 +196,10 @@ class FrameAnalyzer {
                     sum += g
                     sumSq += g * g
                     count++
+                    val tile = (row * TILE_GRID / height) * TILE_GRID + col * TILE_GRID / width
+                    tileSum[tile] += g
+                    tileSumSq[tile] += g * g
+                    tileCount[tile]++
                 }
                 col += SAMPLE_STRIDE
             }
@@ -196,6 +212,14 @@ class FrameAnalyzer {
         val mean = sum.toFloat() / count
         // Variance = E[x²] - E[x]²
         val variance = (sumSq.toFloat() / count) - (mean * mean)
+        val tileMeans = FloatArray(TILE_GRID * TILE_GRID)
+        val tileVariances = FloatArray(TILE_GRID * TILE_GRID)
+        for (i in tileMeans.indices) {
+            if (tileCount[i] == 0) continue
+            tileMeans[i] = tileSum[i].toFloat() / tileCount[i]
+            tileVariances[i] = (tileSumSq[i].toFloat() / tileCount[i] -
+                tileMeans[i] * tileMeans[i]).coerceAtLeast(0f)
+        }
 
         // ── Lighting state machine ─────────────────────────────────────────
         updateLightingState(mean)
@@ -206,7 +230,38 @@ class FrameAnalyzer {
         //   2. Near-uniform (variance < OCCLUSION_VARIANCE_THRESHOLD)
         // A dark-but-textured scene (night with varying lights) has low mean
         // but normal variance → NOT classified as obstruction.
-        updateOcclusionState(mean, variance)
+        val isDarkCover = mean < OCCLUSION_DARK_THRESHOLD && variance < OCCLUSION_VARIANCE_THRESHOLD
+        val fullCover = baselineReady && variance < COVER_TILE_VARIANCE &&
+            tileMeans.indices.count { i ->
+                tileCount[i] > 0 &&
+                    kotlin.math.abs(tileMeans[i] - baselineMean[i]) >= COVER_BRIGHTNESS_CHANGE &&
+                    baselineVariance[i] >= COVER_BASELINE_VARIANCE
+            } >= 8
+        // A partial cover can enter from an edge or the middle. Demand a 2x2
+        // patch with lost texture and an abrupt change from the clear baseline.
+        val changedTiles = BooleanArray(tileMeans.size) { i ->
+            baselineReady && tileCount[i] > 0 &&
+                tileVariances[i] < COVER_TILE_VARIANCE &&
+                baselineVariance[i] >= COVER_BASELINE_VARIANCE &&
+                kotlin.math.abs(tileMeans[i] - baselineMean[i]) >= COVER_BRIGHTNESS_CHANGE
+        }
+        val patches = intArrayOf(0, 1, 2, 4, 5, 6, 8, 9, 10)
+        val partialCover = patches.any { i ->
+            changedTiles[i] && changedTiles[i + 1] &&
+                changedTiles[i + TILE_GRID] && changedTiles[i + TILE_GRID + 1]
+        }
+        val isCandidate = isDarkCover || fullCover || partialCover
+        updateOcclusionState(isCandidate)
+        if (!isCandidate && currentOcclusionState == OcclusionState.CLEAR) {
+            for (i in tileMeans.indices) {
+                if (tileCount[i] == 0) continue
+                baselineMean[i] = if (baselineReady) baselineMean[i] * 0.95f + tileMeans[i] * 0.05f
+                                  else tileMeans[i]
+                baselineVariance[i] = if (baselineReady)
+                    baselineVariance[i] * 0.95f + tileVariances[i] * 0.05f else tileVariances[i]
+            }
+            baselineReady = true
+        }
 
         return FrameAnalysis(
             meanLuminance = mean,
@@ -252,8 +307,7 @@ class FrameAnalyzer {
         }
     }
 
-    private fun updateOcclusionState(mean: Float, variance: Float) {
-        val isCandidate = mean < OCCLUSION_DARK_THRESHOLD && variance < OCCLUSION_VARIANCE_THRESHOLD
+    private fun updateOcclusionState(isCandidate: Boolean) {
 
         when (currentOcclusionState) {
             OcclusionState.CLEAR -> {
@@ -314,7 +368,7 @@ class FrameAnalyzer {
      * confirmed torch hardware outcome (e.g. FLASHLIGHT_ON after enableTorch
      * future completes, or ERROR on failure).
      */
-    fun setLightingState(state: LightingState) {
+    @Synchronized fun setLightingState(state: LightingState) {
         currentLightingState = state
         // Reset brightness counters so the new state is evaluated fresh.
         darkFrameCount = 0

@@ -45,22 +45,22 @@ class AngleDetector(
 ) {
     companion object {
         /** Lower pitch bound in degrees. Camera points at floor below this. */
-        const val PITCH_TARGET_MIN_DEG = -60f
+        const val PITCH_TARGET_MIN_DEG = -75f
 
         /** Upper pitch bound in degrees. Camera points too high above this. */
-        const val PITCH_TARGET_MAX_DEG = -20f
+        const val PITCH_TARGET_MAX_DEG = -10f
 
         /** Maximum acceptable roll magnitude (degrees). */
-        const val ROLL_ACCEPTABLE_DEG  = 20f
+        const val ROLL_ACCEPTABLE_DEG  = 35f
 
         /** Hysteresis dead band around all thresholds to prevent oscillation. */
-        const val DEAD_BAND_DEG        = 5f
+        const val DEAD_BAND_DEG        = 8f
 
         /** Smoothing: rolling average over this many sensor readings. */
         const val SMOOTHING_SAMPLES    = 5
 
         /** Consecutive smoothed readings in same out-of-range state before callback fires. */
-        const val PERSISTENCE_SAMPLES  = 3
+        const val PERSISTENCE_SAMPLES  = 6
 
         /** SensorManager delay. SENSOR_DELAY_NORMAL ≈ 200 ms between events. */
         const val SENSOR_DELAY = SensorManager.SENSOR_DELAY_NORMAL
@@ -237,7 +237,7 @@ object AngleClassifier {
         AngleState.TOO_LOW      -> "Tilt phone upright."
         AngleState.TILTED_LEFT  -> "Tilt phone right."
         AngleState.TILTED_RIGHT -> "Tilt phone left."
-        AngleState.GOOD         -> "Phone angle looks good."
+        AngleState.GOOD         -> null
         AngleState.ADJUSTING,
         AngleState.UNAVAILABLE  -> null
     }

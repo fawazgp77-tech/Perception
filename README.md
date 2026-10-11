@@ -1,8 +1,10 @@
-# Mobility Assist — Phase 3 demo
+# Mobility Assist — Phase 4 prototype
 
 > **Important safety notice:** Mobility Assist is a supervised prototype aid — not a validated mobility device. It cannot detect all hazards. Always use a cane, guide dog, or human assistance. A warning-free frame does not mean the path is safe.
 
-Phase 3 adds automatic flashlight control, phone-angle guidance, and camera-obstruction detection on top of the Phase 2 offline obstacle-detection pipeline.
+The current build fixes Phase 3 angle and lens warnings, broadens object classes, adds a cautious wall alert, and provides a start menu with a Google Maps walking-route handoff. Camera analysis remains on-device; Maps and speech recognition may need internet access. The Maps route runs in Google Maps while camera assistance is paused.
+
+See [`docs/PHASE_4_AUDIT.md`](docs/PHASE_4_AUDIT.md) for the code audit, implementation limits, and phone test plan.
 
 See [`docs/PHASE_3_IMPLEMENTATION_PLAN.md`](docs/PHASE_3_IMPLEMENTATION_PLAN.md) for the architecture and design, [`docs/PHASE_3_CHECKLIST.md`](docs/PHASE_3_CHECKLIST.md) for the device test checklist, and [`VERIFICATION.md`](VERIFICATION.md) for the current build and test status.
 
@@ -15,9 +17,8 @@ Earlier phases: [`PHASE2_PLAN.md`](PHASE2_PLAN.md) · [`PHASE2_TEST_CHECKLIST.md
 ### Phase 1 / 2 (existing)
 
 - Rear camera → on-device EfficientDet-Lite0 INT8 inference via MediaPipe Tasks Vision.
-- Seven-class allowlist: person, car, bus, truck, bicycle, motorcycle, dog.
-- Five-tier warning hierarchy: `STOP → Ahead → Both sides → Left → Right`.
-- Two-frame confirmation gate; two-second speech cooldown; urgent STOP interrupts all.
+- Original Phase 2 seven-class allowlist and five-tier guidance are retained in the Phase 2 archive; the current build uses every class trained into EfficientDet and adds a tentative Wall message.
+- Two-frame confirmation gate; longer warning cooldowns; urgent STOP interrupts lower-priority speech.
 - Spoken warnings (offline TTS) + distinct vibration patterns.
 - Colored bounding-box overlay with LEFT / CENTER / RIGHT zone guides.
 - Rolling p95 / FPS diagnostics.
@@ -31,12 +32,20 @@ The rear torch is automatically activated when sustained darkness is detected (m
 Spoken feedback: "Too dark. Turning on flashlight." / "Flashlight is on." / "Lighting improved. Turning off flashlight." On devices without flash hardware the app announces "Flashlight unavailable on this device." and shows `FLASHLIGHT: N/A`.
 
 #### Phone-angle guidance
-Uses `TYPE_ROTATION_VECTOR` (no permission required) to estimate pitch and roll. Target range: pitch −60° to −20° (camera pointing usefully forward/down), roll ±20°. A 5° dead band, 5-sample rolling average, and 3-reading persistence gate prevent oscillation. Direction-specific spoken guidance: "Tilt phone upright." / "Tilt phone down." / "Tilt phone left." / "Tilt phone right." / "Phone angle looks good."
+Uses `TYPE_ROTATION_VECTOR` (no permission required) to estimate pitch and roll. Current tolerant range: pitch −75° to −10°, roll ±35°, with an 8° dead band and 6-reading persistence gate. Direction-specific guidance remains available, but "phone angle looks good" is no longer spoken. Angle reminders share a 20-second cooldown.
 
 Thresholds are engineering starting values — tune on hardware before demo sign-off.
 
 #### Camera obstruction detection
-Detects when the lens is covered by analysing mean luminance and pixel variance in sampled camera frames. Obstruction requires **both** signals: very dark (mean < 20) **and** near-uniform (variance < 5). A dark-but-textured scene (e.g. night with lights) has high variance and is not flagged. After 10 consecutive candidate frames: "Camera covered. Please move your hand." Recovery to `CAMERA: CLEAR` requires 8 consecutive clear frames.
+Detects a dark full-lens cover or a sustained loss of texture and brightness change across image tiles. This can flag bright and partial covers after an unobstructed baseline has been observed. Recovery to `CAMERA: CLEAR` requires 8 consecutive clear frames. It remains a heuristic and requires phone testing for false positives.
+
+### Phase 4 additions
+
+- The start menu opens camera assistance, controls spoken guidance (enabled by default), accepts a typed or spoken destination, and saves a Home address locally.
+- The walking-route button reads back the destination and opens a Google Maps **walking preview**. Google Maps displays travel time and requests the final Start action. This app does not calculate an ETA or speak turns itself.
+- The bundled EfficientDet model now reports all of its trained COCO classes instead of only seven. This expands coverage but cannot detect every possible obstacle.
+- A second **bundled on-device** ML Kit image labeler checks the central camera view roughly every 1.5 seconds. Two confident Wall labels trigger "Possible wall ahead." It provides no depth or collision guarantee.
+- Nonurgent obstacle speech has a 6-second cooldown; STOP has a 4-second cooldown; tentative wall reminders have a 15-second cooldown. Camera and angle messages yield to recent obstacle warnings.
 
 This is image-quality-based obstruction detection, not semantic hand recognition.
 
@@ -81,7 +90,7 @@ app/build/outputs/apk/debug/app-debug.apk
 .\build.ps1 testDebugUnitTest
 ```
 
-Expected: **64 tests, 0 failures** (7 existing + 57 new Phase 3 tests).  
+Expected: **79 tests, 0 failures** (including Phase 4 unit tests).
 Test reports: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
 ### Install on device
@@ -96,14 +105,13 @@ Or open in Android Studio and use Run (▶).
 
 ## Usage
 
-1. Launch the app. Grant camera permission when prompted.
-2. The app briefly shows a Phase 3 onboarding message.
-3. Point the rear camera at the scene ahead. Hold the phone at a comfortable forward-facing angle.
-4. The status row shows three indicators: **LIGHTING**, **ANGLE**, and **CAMERA**.
-5. Spoken warnings are provided for obstacles, angle guidance, flashlight changes, and camera obstruction.
-6. Use **Pause assistance** / **Resume assistance** to stop and restart the camera and feedback.
+1. Launch the app. Spoken camera guidance is enabled by default in the start menu.
+2. Tap **Start camera assistance** and grant camera permission. Hold the rear camera toward the scene ahead.
+3. The status row shows **LIGHTING**, **ANGLE**, and **CAMERA**. Use **Pause assistance** / **Resume assistance** or **Back to menu** as needed.
+4. For a walking route, type or speak a destination, review its readback, then open Google Maps. Check the destination and ETA in Maps before tapping its **Start** button.
+5. Enter an address and tap **Save entered address as Home** to use the Home route button later.
 
-To use offline: install an offline English TTS voice, then enable airplane mode. The app will function without any network connection.
+For offline camera assistance, install an offline English TTS voice. Google Maps routing and some installed speech-recognition services require connectivity; typed destination entry remains available.
 
 ---
 
@@ -127,7 +135,7 @@ If missing, download from the [official MediaPipe model page](https://ai.google.
 2. Analysis requests 640×480 RGBA frames with `STRATEGY_KEEP_ONLY_LATEST`. Old pending frames are dropped.
 3. **Phase 3 new:** `FrameAnalyzer` samples the frame buffer for brightness and obstruction before inference. Mean luminance (green channel proxy) and pixel variance are computed over ~1,600 sampled pixels.
 4. `ObjectDetectorHelper` converts the frame to a bitmap, crops to the viewport, rotates upright, and runs synchronous MediaPipe inference.
-5. `DecisionEngine` classifies detections into warnings using area/region/overlap rules.
+5. `DecisionEngine` classifies detections into warnings using area/region/overlap rules. The bundled ML Kit labeler separately samples the central image for a tentative Wall label.
 6. **Phase 3 new:** `AngleDetector` receives `TYPE_ROTATION_VECTOR` sensor events on the main thread and classifies pitch/roll into an `AngleState`.
 7. `SpeechHapticManager` speaks obstacle warnings via `warn(Warning)` (QUEUE_FLUSH, existing gate). Phase 3 messages use the new `speak()` method with a separate `Phase3SpeechGate` — obstacle warnings are never blocked by Phase 3 speech.
 8. **Phase 3 new:** `MainActivity.handleFrameAnalysis()` drives torch control via `Camera.cameraControl.enableTorch()`, obstruction speech, and the compact status row UI.
@@ -150,11 +158,13 @@ If missing, download from the [official MediaPipe model page](https://ai.google.
 | `Phase3State.kt` | State enums: `LightingState`, `AngleState`, `OcclusionState` |
 | `FrameAnalyzer.kt` | Brightness estimation + obstruction detection |
 | `AngleDetector.kt` | Sensor orientation estimation + `AngleClassifier` |
-| `DecisionEngineTest.kt` | 6 JVM unit tests — obstacle rules (unchanged) |
+| `SceneLabeler.kt` | Sparse on-device wall image labeling |
+| `WalkingRouteUrl.kt` | Encoded Google Maps walking-preview URL |
+| `DecisionEngineTest.kt` | JVM unit tests — obstacle rules and warning cooldown |
 | `PipelineMetricsTest.kt` | 1 JVM unit test — diagnostics (unchanged) |
 | `Phase3SpeechTest.kt` | 11 JVM unit tests — `Phase3SpeechGate` |
-| `FrameAnalyzerTest.kt` | 22 JVM unit tests — brightness and obstruction state machines |
-| `AngleDetectorTest.kt` | 24 JVM unit tests — `AngleClassifier` classification and guidance |
+| `FrameAnalyzerTest.kt` | JVM tests — brightness and obstruction state machines |
+| `AngleDetectorTest.kt` | JVM tests — angle classification and guidance |
 
 ---
 
@@ -175,10 +185,10 @@ See [`VERIFICATION.md`](VERIFICATION.md) for the full status table.
 
 - Phase 1: items 1–5, 7–9 passed on physical hardware. Items 6, 10–15 pending.
 - Phase 2: all 10 device-checklist items pending.
-- Phase 3: code complete; automated tests and physical-device validation pending.
+- Phase 4: automated checks pass; physical-device validation pending. See the [Phase 4 audit](docs/PHASE_4_AUDIT.md).
 
 Known limitations:
-- The model does not detect stairs, drop-offs, glass, poles, puddles, or objects outside the seven-class allowlist.
+- The models do not guarantee detection of stairs, drop-offs, glass, poles, puddles, or arbitrary unknown obstacles. The Wall result is a tentative scene label, not distance or collision detection.
 - Box area is a rough proximity proxy — it is not depth or time-to-collision.
 - Angle guidance is sensor-only (image-based framing deferred).
 - Obstruction detection uses image quality signals, not hand recognition.

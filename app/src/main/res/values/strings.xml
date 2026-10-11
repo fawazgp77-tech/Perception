@@ -2,7 +2,26 @@
 <resources>
     <!-- App identity -->
     <string name="app_name">Mobility Assist</string>
-    <string name="screen_title">Mobility Assist · Phase 3 demo</string>
+    <string name="screen_title">Mobility Assist</string>
+    <string name="menu_title">Mobility Assist</string>
+    <string name="enable_speech">Spoken obstacle guidance</string>
+    <string name="start_assistance">Start camera assistance</string>
+    <string name="map_navigation_title">Walking directions</string>
+    <string name="destination_hint">Enter an address or place</string>
+    <string name="speak_destination">Speak destination</string>
+    <string name="preview_walking_route">Preview walking route</string>
+    <string name="save_home">Save entered address as Home</string>
+    <string name="navigate_home">Walking route to Home</string>
+    <string name="back_to_menu">Back to menu</string>
+    <string name="map_handoff_note">Google Maps will show the route and estimated time. Review them there before tapping Start. Camera assistance pauses while Maps is open.</string>
+    <string name="destination_missing">Enter or speak a destination first.</string>
+    <string name="home_missing">Save your Home address first.</string>
+    <string name="home_saved">Home address saved on this phone.</string>
+    <string name="voice_input_unavailable">Voice input unavailable. Type the address instead.</string>
+    <string name="maps_unavailable">No app can open the walking route.</string>
+    <string name="route_confirmation">Destination: %1$s. Open Google Maps to check the walking route and travel time?</string>
+    <string name="open_maps">Open Google Maps</string>
+    <string name="cancel">Cancel</string>
 
     <!-- Existing Phase 1/2 strings — unchanged -->
     <string name="starting_detector">Starting detector…</string>

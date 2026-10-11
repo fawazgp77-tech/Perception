@@ -251,3 +251,28 @@ Result conventions:
 
 **Phase 3 supervised demo status: NOT READY.**  
 Sections 6 (build) and 7 (device evaluation) must be completed on a physical phone and all PASS/FAIL outcomes recorded before a supervised demo may be approved.
+
+---
+
+## Quick phone checklist (about 10 minutes)
+
+For the newer Phase 4 build, use [the updated phone checklist](PHASE_4_AUDIT.md#supervised-phone-checklist). The steps below describe the historical Phase 3 APK.
+
+Use this shorter checklist for a first pass. Test while **standing still in a safe room with a sighted helper**; do not use the app to decide whether it is safe to walk. Install the locally built Phase 3 APK (`app/build/outputs/apk/debug/mobility-assist-phase3-debug.apk`, or `app-debug.apk` in the same folder), turn up media volume, and enable an offline English text-to-speech voice. Mark each item **Pass**, **Fail**, or **Not available** and write down what happened when it fails.
+
+Phone / Android version: __________  Tester / date: __________  TTS voice: __________
+
+| # | What to do on the phone | What should happen | Result / notes |
+|---|---|---|---|
+| 1 | Open the app and allow camera access. | The rear-camera picture appears and the screen shows that it is scanning; no crash. |PASS |
+| 2 | In a bright room, point the camera at a person, bicycle, or parked vehicle. | A labeled box appears around a supported object. A warning may speak when it is near enough. |PASS |
+| 3 | Keep a large supported object in the center of the picture. | The app says “Stop. Obstacle ahead.” and gives a stronger vibration. | PASS|
+| 4 | Hold the phone at different angles: roughly forward, toward the ceiling, then toward the floor. | The **ANGLE** status changes and spoken tilt guidance matches the movement. |SLIGHT PASS |
+| 5 | If the phone has a rear flash, dim the room for a few seconds, then turn the lights back on. | The torch turns on in sustained darkness and turns off after lighting recovers. **LIGHTING** and speech follow the change. |SLIGHT PASS |
+| 6 | Cover the rear camera lens fully with a palm for a few seconds, then uncover it. | **CAMERA: BLOCKED** and a spoken warning appear; the app reports recovery after uncovering. | |
+| 7 | Tap **Pause assistance**, then **Resume assistance**. | Camera and warnings stop while paused; the torch turns off. Scanning resumes without a crash. |PASS |
+| 8 | Enable airplane mode and repeat one object and one lens-cover test. | Camera analysis and spoken warnings still work offline. |PASS |
+| 9 | Rotate the phone and briefly send the app to the background, then return. | Preview and status recover; no stuck torch, crash, or repeated speech loop. | |
+| 10 | Leave the app scanning for 5 minutes in a safe, stationary setup. | No freeze, overheating warning, or continuous repeated announcements. | |
+
+If a check fails, note the phone model, lighting, the exact action, and what the app said or displayed. Use Section 7 above for a more detailed follow-up test.

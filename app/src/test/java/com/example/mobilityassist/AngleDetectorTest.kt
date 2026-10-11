@@ -31,6 +31,11 @@ class AngleDetectorTest {
         assertEquals(AngleState.GOOD, AngleClassifier.classify(-40f, 0f))
     }
 
+    @Test fun everydayHandMovementDoesNotTriggerTiltWarning() {
+        assertEquals(AngleState.GOOD, AngleClassifier.classify(-15f, 30f))
+        assertNull(AngleClassifier.guidance(AngleState.GOOD))
+    }
+
     @Test fun goodAngleAtMinPitchBoundary() {
         // Pitch exactly at PITCH_TARGET_MIN_DEG — within range before dead band
         assertEquals(AngleState.GOOD, AngleClassifier.classify(AngleDetector.PITCH_TARGET_MIN_DEG, 0f))
@@ -160,7 +165,7 @@ class AngleDetectorTest {
         assertEquals("Tilt phone upright.",    AngleClassifier.guidance(AngleState.TOO_LOW))
         assertEquals("Tilt phone right.",      AngleClassifier.guidance(AngleState.TILTED_LEFT))
         assertEquals("Tilt phone left.",       AngleClassifier.guidance(AngleState.TILTED_RIGHT))
-        assertEquals("Phone angle looks good.",AngleClassifier.guidance(AngleState.GOOD))
+        assertNull(AngleClassifier.guidance(AngleState.GOOD))
         assertNull(AngleClassifier.guidance(AngleState.ADJUSTING))
         assertNull(AngleClassifier.guidance(AngleState.UNAVAILABLE))
     }

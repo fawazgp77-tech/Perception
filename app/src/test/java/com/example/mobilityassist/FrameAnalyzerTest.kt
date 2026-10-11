@@ -69,6 +69,50 @@ class FrameAnalyzerTest {
         return analyzer.analyze(buf, w, h, w * 4, torch)
     }
 
+    private fun coveredCorner(width: Int = 64, height: Int = 64, tileRows: Int = 2,
+                              tileCols: Int = 2): ByteBuffer {
+        val buf = alternatingBuffer(width, height, 40, 200)
+        for (row in 0 until height * tileRows / FrameAnalyzer.TILE_GRID) {
+            for (col in 0 until width * tileCols / FrameAnalyzer.TILE_GRID) {
+                buf.put(row * width * 4 + col * 4 + 1, 240.toByte())
+            }
+        }
+        return buf
+    }
+
+    @Test fun brightFullLensCoverIsDetectedAfterTexturedBaseline() {
+        analyze(alternatingBuffer(64, 64, 40, 200), w = 64, h = 64)
+        val cover = flatBuffer(64, 64, 240)
+        var result: FrameAnalysis? = null
+        repeat(FrameAnalyzer.OCCLUSION_CONFIRMED_FRAMES) {
+            result = analyze(cover, w = 64, h = 64)
+        }
+        assertEquals(OcclusionState.OBSTRUCTED, result!!.occlusionState)
+    }
+
+    @Test fun sustainedBrightPartialCornerCoverIsDetected() {
+        analyze(alternatingBuffer(64, 64, 40, 200), w = 64, h = 64)
+        val cover = coveredCorner()
+        var result: FrameAnalysis? = null
+        repeat(FrameAnalyzer.OCCLUSION_CONFIRMED_FRAMES) {
+            result = analyze(cover, w = 64, h = 64)
+        }
+        assertEquals(OcclusionState.OBSTRUCTED, result!!.occlusionState)
+        val clear = alternatingBuffer(64, 64, 40, 200)
+        repeat(FrameAnalyzer.OCCLUSION_RECOVERY_FRAMES) {
+            result = analyze(clear, w = 64, h = 64)
+        }
+        assertEquals(OcclusionState.CLEAR, result!!.occlusionState)
+    }
+
+    @Test fun oneSmallUniformTileDoesNotClaimCameraIsBlocked() {
+        analyze(alternatingBuffer(64, 64, 40, 200), w = 64, h = 64)
+        val cover = coveredCorner(tileRows = 1, tileCols = 1)
+        repeat(FrameAnalyzer.OCCLUSION_CONFIRMED_FRAMES + 2) {
+            assertEquals(OcclusionState.CLEAR, analyze(cover, w = 64, h = 64)!!.occlusionState)
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Lighting state machine
     // -----------------------------------------------------------------------

@@ -1,8 +1,107 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
+
+    <ScrollView
+        android:id="@+id/menuPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/menu_title"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:paddingBottom="20dp" />
+
+        <CheckBox
+            android:id="@+id/speechToggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/enable_speech"
+            android:checked="true"
+            android:minHeight="56dp" />
+
+        <TextView
+            android:id="@+id/menuSpeechStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/starting_speech"
+            android:textColor="#FFE082"
+            android:accessibilityLiveRegion="polite"
+            android:paddingBottom="12dp" />
+
+        <Button
+            android:id="@+id/startAssistance"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:text="@string/start_assistance" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/map_navigation_title"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:paddingTop="24dp" />
+
+        <EditText
+            android:id="@+id/destinationInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/destination_hint"
+            android:inputType="textPostalAddress"
+            android:importantForAutofill="no"
+            android:singleLine="true"
+            android:minHeight="56dp" />
+
+        <Button
+            android:id="@+id/speakDestination"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/speak_destination" />
+
+        <Button
+            android:id="@+id/previewWalkingRoute"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/preview_walking_route" />
+
+        <Button
+            android:id="@+id/saveHome"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/save_home" />
+
+        <Button
+            android:id="@+id/navigateHome"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/navigate_home" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/map_handoff_note"
+            android:textColor="#FFFFFF"
+            android:paddingTop="16dp" />
+    </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:id="@+id/scannerPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
 
     <!-- App title -->
     <TextView
@@ -118,4 +217,11 @@
         android:layout_height="64dp"
         android:text="@string/pause_assistance" />
 
-</LinearLayout>
+    <Button
+        android:id="@+id/backToMenu"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="@string/back_to_menu" />
+
+    </LinearLayout>
+</FrameLayout>

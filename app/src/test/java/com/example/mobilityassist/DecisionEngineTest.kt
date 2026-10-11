@@ -23,6 +23,10 @@ class DecisionEngineTest {
         assertEquals(Warning.OBSTACLE_RIGHT, engine.decide(listOf(right)))
         assertEquals(Warning.BOTH_SIDES, engine.decide(listOf(left, right)))
     }
+    @Test fun decisionRulesAlsoHandleNewCocoClasses() {
+        val chair = Obstacle("chair", 0.8f, .25f, .1f, .75f, .8f)
+        assertEquals(Warning.STOP, engine.decide(listOf(chair)))
+    }
     @Test fun regionBoundaries() {
         assertEquals(Region.CENTER, left.copy(left = 1f / 3, right = 1f / 3).region)
         assertEquals(Region.RIGHT, left.copy(left = 2f / 3, right = 2f / 3).region)
@@ -40,11 +44,19 @@ class DecisionEngineTest {
         assertTrue(gate.allow(Warning.OBSTACLE_RIGHT, 0))
         assertFalse(gate.allow(Warning.OBSTACLE_LEFT, 100))
         assertTrue(gate.allow(Warning.STOP, 200))
-        assertFalse(gate.allow(Warning.STOP, 2199))
-        assertTrue(gate.allow(Warning.STOP, 2200))
-        assertFalse(gate.allow(Warning.AHEAD, 2300))
+        assertFalse(gate.allow(Warning.STOP, 4_199))
+        assertTrue(gate.allow(Warning.STOP, 4_200))
+        assertFalse(gate.allow(Warning.AHEAD, 4_300))
         gate.reset()
-        assertTrue(gate.allow(Warning.AHEAD, 2400))
+        assertTrue(gate.allow(Warning.AHEAD, 4_400))
+    }
+
+    @Test fun possibleWallReminderIsQuietButStopStillInterrupts() {
+        val gate = WarningGate()
+        assertTrue(gate.allow(Warning.POSSIBLE_WALL, 0L))
+        assertFalse(gate.allow(Warning.POSSIBLE_WALL, 10_000L))
+        assertTrue(gate.allow(Warning.STOP, 10_100L))
+        assertTrue(gate.allow(Warning.POSSIBLE_WALL, 16_200L))
     }
 
     @Test fun nonurgentGuidanceNeedsFreshConfirmation() {
