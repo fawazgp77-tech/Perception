@@ -67,6 +67,12 @@
             android:accessibilityLiveRegion="polite"
             android:paddingVertical="10dp" />
 
+        <Button
+            android:id="@+id/retryLocation"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="@string/retry_location" />
+
         <EditText
             android:id="@+id/destinationInput"
             android:layout_width="match_parent"
@@ -76,6 +82,36 @@
             android:importantForAutofill="no"
             android:singleLine="true"
             android:minHeight="56dp" />
+
+        <TextView
+            android:id="@+id/destinationSearchStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:accessibilityLiveRegion="polite"
+            android:paddingVertical="6dp"
+            android:text="@string/destination_search_prompt" />
+
+        <LinearLayout
+            android:id="@+id/destinationSuggestions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <FrameLayout
+            android:id="@+id/menuMapHost"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:layout_marginVertical="8dp"
+            android:background="#202A32">
+            <TextView
+                android:id="@+id/menuMapStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:background="#CC202A32"
+                android:padding="8dp"
+                android:text="@string/map_loading" />
+        </FrameLayout>
 
         <Button
             android:id="@+id/speakDestination"

@@ -16,23 +16,29 @@ import com.mappls.sdk.maps.annotations.MarkerOptions
 import com.mappls.sdk.maps.annotations.PolylineOptions
 import com.mappls.sdk.maps.camera.CameraUpdateFactory
 import com.mappls.sdk.maps.geometry.LatLng
+import com.mappls.sdk.maps.geometry.LatLngBounds
+import com.mappls.sdk.geojson.Point
 
 /** One MapView is reparented between mini and half-screen hosts; attribution remains visible. */
 class InAppWalkingMap(
     activity: Activity,
+    private val menuHost: FrameLayout,
     private val miniHost: FrameLayout,
     private val expandedHost: FrameLayout,
-    private val onError: (String) -> Unit
+    private val onReady: () -> Unit,
+    private val onError: (Int) -> Unit
 ) {
     private val view: MapView
     private var map: MapplsMap? = null
     private var currentMarker: Marker? = null
     private var route: WalkingRoute? = null
+    private var selected: Point? = null
     private var latest: Location? = null
     private var lastPanMs = 0L
     private var started = false
     private var resumed = false
     private var destroyed = false
+    private var following = false
 
     init {
         Mappls.getInstance(activity.applicationContext)
@@ -40,7 +46,7 @@ class InAppWalkingMap(
         view.setMaximumFps(20)
         view.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        miniHost.addView(view, 0)
+        menuHost.addView(view, 0)
         view.onCreate(null)
         view.getMapAsync(object : OnMapReadyCallback {
             override fun onMapReady(mapplsMap: MapplsMap) {
@@ -48,30 +54,51 @@ class InAppWalkingMap(
                 map = mapplsMap
                 drawRoute()
                 latest?.let(::updatePosition)
+                onReady()
             }
 
             override fun onMapError(code: Int, message: String?) {
-                onError("Mappls map error $code: ${message.orEmpty()}")
+                onError(code)
             }
         })
     }
 
     fun setRoute(value: WalkingRoute) {
         route = value
+        selected = value.destination
+        drawRoute()
+    }
+
+    fun setSelectedPlace(point: Point?) {
+        selected = point
+        route = null
+        drawRoute()
+    }
+
+    fun showMenu() {
+        following = false
+        reparent(menuHost)
         drawRoute()
     }
 
     private fun drawRoute() {
         val m = map ?: return
-        val r = route ?: return
         m.clear()
         currentMarker = null
-        val points = r.route.getCoordinates().map { LatLng(it.latitude(), it.longitude()) }
-        if (points.size > 1) {
-            m.addPolyline(PolylineOptions().addAll(points).color(Color.rgb(0, 213, 232)).width(6f))
+        val r = route
+        if (r != null) {
+            val points = r.route.getCoordinates().map { LatLng(it.latitude(), it.longitude()) }
+            if (points.size > 1) {
+                m.addPolyline(PolylineOptions().addAll(points).color(Color.rgb(0, 213, 232)).width(6f))
+                val bounds = LatLngBounds.Builder().includes(points).build()
+                view.post { if (!destroyed && !following) m.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 32)) }
+            }
         }
-        m.addMarker(MarkerOptions().position(LatLng(r.destination.latitude(), r.destination.longitude()))
-            .title("Destination"))
+        selected?.let { m.addMarker(MarkerOptions().position(LatLng(it.latitude(), it.longitude()))
+            .title("Destination")) }
+        if (r == null) selected?.let {
+            m.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude(), it.longitude()), 15.0))
+        }
         latest?.let(::updatePosition)
     }
 
@@ -83,7 +110,7 @@ class InAppWalkingMap(
         if (marker == null) currentMarker = m.addMarker(MarkerOptions().position(latLng).title("You are here"))
         else marker.position = latLng
         val now = SystemClock.elapsedRealtime()
-        if (now - lastPanMs >= 1_500L) {
+        if ((following || route == null && selected == null) && now - lastPanMs >= 1_500L) {
             m.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16.5))
             lastPanMs = now
         }
@@ -91,11 +118,16 @@ class InAppWalkingMap(
 
     fun setExpanded(expanded: Boolean) {
         val target = if (expanded) expandedHost else miniHost
+        following = true
+        reparent(target)
+        latest?.let(::updatePosition)
+    }
+
+    private fun reparent(target: FrameLayout) {
         if (view.parent === target) return
         (view.parent as? ViewGroup)?.removeView(view)
         target.addView(view, 0)
         view.requestLayout()
-        latest?.let(::updatePosition)
     }
 
     fun onStart() { if (!started) { view.onStart(); started = true } }

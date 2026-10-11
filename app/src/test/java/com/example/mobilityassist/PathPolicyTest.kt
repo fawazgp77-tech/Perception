@@ -25,6 +25,21 @@ class PathPolicyTest {
         assertFalse(PathPolicy.assess(scene(id = 0), 30, 30).blocked)
     }
 
+    @Test fun broadBuildingLikeSurfaceGivesCautiousWarningAfterTwoFreshSamples() {
+        val sample = PathPolicy.assess(scene(id = 2), 30, 30)
+        assertTrue(sample.broadSurface)
+        val tracker = PathGuidanceTracker()
+        assertNull(tracker.observe(sample).guidance)
+        assertEquals(Warning.POSSIBLE_OBSTRUCTION, tracker.observe(sample).guidance)
+        assertNull(sample.clearerSide)
+    }
+
+    @Test fun unknownUniformMaskNeedsSeparatePlainFrameEvidence() {
+        assertFalse(PathPolicy.assess(scene(id = 0), 30, 30).broadSurface)
+        assertTrue(PathPolicy.assess(scene(id = 0), 30, 30, plainFrame = true).broadSurface)
+        assertFalse(PathPolicy.assess(scene(id = 4), 30, 30, plainFrame = true).broadSurface)
+    }
+
     @Test fun wallOutsideCenterDoesNotBlockForwardPath() {
         val labels = scene(id = 4)
         for (y in 0 until 30) for (x in 0 until 8) labels[y * 30 + x] = 1

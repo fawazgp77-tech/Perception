@@ -168,7 +168,8 @@ class FrameAnalyzer {
                 meanLuminance = 128f,
                 variance = 100f,
                 lightingState = currentLightingState,
-                occlusionState = currentOcclusionState
+                occlusionState = currentOcclusionState,
+                exposureSettling = true
             )
         }
 

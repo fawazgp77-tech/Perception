@@ -52,5 +52,6 @@ data class FrameAnalysis(
     val meanLuminance: Float,     // 0–255 estimated mean luminance (green channel proxy)
     val variance: Float,          // Pixel variance of sampled green values
     val lightingState: LightingState,
-    val occlusionState: OcclusionState
+    val occlusionState: OcclusionState,
+    val exposureSettling: Boolean = false
 )

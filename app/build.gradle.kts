@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.mobilityassist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "5.1-navigation-demo"
+        versionCode = 9
+        versionName = "5.1-map-wall-recovery"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -39,5 +39,6 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("com.google.ar:core:1.56.0")
     implementation("com.mappls.sdk:mappls-android-sdk:9.0.3")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation("junit:junit:4.13.2")
 }

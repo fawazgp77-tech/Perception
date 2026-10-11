@@ -36,7 +36,7 @@ class PathSegmenter(
     }
 
     /** Returns the last fresh assessment between inference calls; null when confidence is insufficient. */
-    fun maybeAnalyze(frame: ImageProxy): PathAssessment? {
+    fun maybeAnalyze(frame: ImageProxy, frameQuality: FrameAnalysis? = null): PathAssessment? {
         val now = SystemClock.elapsedRealtime()
         if (now - lastRunMs < intervalMs) return cachedResult(now)
         val raw = frame.toBitmap()
@@ -45,7 +45,11 @@ class PathSegmenter(
             val crop = frame.cropRect
             val rotate = Matrix().apply { postRotate(frame.imageInfo.rotationDegrees.toFloat()) }
             upright = Bitmap.createBitmap(raw, crop.left, crop.top, crop.width(), crop.height(), rotate, true)
-            return maybeAnalyzeBitmap(upright)
+            val plainFrame = frameQuality != null &&
+                !frameQuality.exposureSettling &&
+                frameQuality.occlusionState == OcclusionState.CLEAR &&
+                frameQuality.meanLuminance in 35f..245f && frameQuality.variance < 450f
+            return maybeAnalyzeBitmap(upright, plainFrame)
         } finally {
             if (upright !== raw) upright?.recycle()
             raw.recycle()
@@ -53,7 +57,7 @@ class PathSegmenter(
     }
 
     /** Bitmap must already match the visible upright camera view; caller retains ownership. */
-    fun maybeAnalyzeBitmap(bitmap: Bitmap): PathAssessment? {
+    fun maybeAnalyzeBitmap(bitmap: Bitmap, plainFrame: Boolean = false): PathAssessment? {
         val now = SystemClock.elapsedRealtime()
         if (now - lastRunMs < intervalMs) return cachedResult(now)
         lastRunMs = now
@@ -75,7 +79,7 @@ class PathSegmenter(
                 val sourceY = y * SIZE / GRID + SIZE / GRID / 2
                 mask[y * GRID + x] = output.getInt((sourceY * SIZE + sourceX) * 4)
             }
-            val assessment = PathPolicy.assess(mask, GRID, GRID)
+            val assessment = PathPolicy.assess(mask, GRID, GRID, plainFrame)
             lastResult = guidance.observe(assessment)
             return lastResult
         } finally { if (scaled !== bitmap) scaled.recycle() }
@@ -97,7 +101,7 @@ class PathSegmenter(
         const val MODEL = "path_segmentation_ade20k.tflite"
         const val SIZE = 512
         const val GRID = 64
-        const val FAST_SAMPLE_INTERVAL_MS = 650L
+        const val FAST_SAMPLE_INTERVAL_MS = 500L
     }
 }
 
@@ -111,6 +115,7 @@ data class PathAssessment(
     val pathContinues: Boolean,
     val forwardClear: Boolean,
     val clearerSide: Region?,
+    val broadSurface: Boolean = false,
     val guidance: Warning? = null
 )
 
@@ -120,13 +125,15 @@ class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {
     private var clearStreak = 0
     private var blockedSeen = false
     private var sideStreak = 0
+    private var broadSurfaceStreak = 0
     private var pendingSide: Region? = null
 
     fun observe(sample: PathAssessment): PathAssessment {
         blockedStreak = if (sample.blocked) blockedStreak + 1 else 0
+        broadSurfaceStreak = if (sample.broadSurface) broadSurfaceStreak + 1 else 0
         val confirmedBlock = sample.blocked &&
             (blockedStreak >= 2 || (immediateStrongWall && sample.wallFraction >= 0.75f))
-        if (confirmedBlock) blockedSeen = true
+        if (confirmedBlock || broadSurfaceStreak >= 2) blockedSeen = true
         val side = if (confirmedBlock) sample.clearerSide else null
         sideStreak = if (side != null && side == pendingSide) sideStreak + 1 else if (side != null) 1 else 0
         pendingSide = side
@@ -140,6 +147,7 @@ class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {
             confirmedBlock && (sideStreak >= 2 || sample.wallFraction >= 0.75f) &&
                 side == Region.RIGHT -> Warning.PATH_RIGHT
             confirmedBlock -> Warning.PATH_BLOCKED
+            broadSurfaceStreak >= 2 -> Warning.POSSIBLE_OBSTRUCTION
             else -> null
         }
         return sample.copy(blocked = confirmedBlock, guidance = warning)
@@ -150,6 +158,7 @@ class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {
         clearStreak = 0
         blockedSeen = false
         sideStreak = 0
+        broadSurfaceStreak = 0
         pendingSide = null
     }
 }
@@ -158,7 +167,7 @@ class PathGuidanceTracker(private val immediateStrongWall: Boolean = true) {
 object PathPolicy {
     private fun walkable(id: Int) = id == 4 || id == 12
 
-    fun assess(labels: IntArray, width: Int, height: Int): PathAssessment {
+    fun assess(labels: IntArray, width: Int, height: Int, plainFrame: Boolean = false): PathAssessment {
         require(width > 0 && height > 0 && labels.size == width * height)
         val walkableMask = BooleanArray(labels.size) { walkable(labels[it]) }
         val seen = BooleanArray(labels.size)
@@ -224,6 +233,19 @@ object PathPolicy {
         // Absence of a path alone is ambiguous (sky, blur, covered lens, bad angle).
         val blocked = wallFraction >= 0.55f ||
             (bottomFraction >= 0.20f && !pathContinues && wallFraction >= 0.30f)
+        // A large building-like surface can be a wall missed by class 1. It is
+        // only a possible obstruction; unknown, sky and bare floor are excluded.
+        var broadCells = 0
+        var unknownCells = 0
+        var broadTotal = 0
+        for (y in height * 2 / 5 until height) for (x in width / 3 until width * 2 / 3) {
+            broadTotal++
+            if (labels[y * width + x] == 2) broadCells++
+            if (labels[y * width + x] == 0) unknownCells++
+        }
+        val broadSurface = !blocked && !pathContinues && bottomFraction < 0.12f &&
+            (broadCells.toFloat() / broadTotal.coerceAtLeast(1) >= 0.72f ||
+                plainFrame && unknownCells.toFloat() / broadTotal.coerceAtLeast(1) >= 0.88f)
         // Only suggest a side with a connected, visible walkable corridor. An
         // unlabeled or merely plain-looking image cannot establish a route.
         val clearerSide = if (blocked) when {
@@ -234,6 +256,6 @@ object PathPolicy {
             else -> null
         } else null
         return PathAssessment(blocked, walkableMask, width, height, wallFraction,
-            midPathFraction, pathContinues, forwardClear, clearerSide)
+            midPathFraction, pathContinues, forwardClear, clearerSide, broadSurface)
     }
 }

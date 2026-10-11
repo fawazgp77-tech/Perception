@@ -31,6 +31,7 @@ enum class Warning(val text: String, val urgent: Boolean = false) {
     STOP("Stop. Obstacle ahead.", true),
     AHEAD("Obstacle ahead."),
     POSSIBLE_WALL("Possible wall ahead."),
+    POSSIBLE_OBSTRUCTION("Possible obstruction ahead. Stop and check."),
     PATH_BLOCKED("Path ahead may be blocked."),
     PATH_LEFT("Path ahead may be blocked. Turn left to check for a way through."),
     PATH_RIGHT("Path ahead may be blocked. Turn right to check for a way through."),
@@ -106,14 +107,14 @@ class WarningGate(private val cooldownMs: Long = 6_000) {
     private var lastTime: Long? = null
     private var lastWarning: Warning? = null
     fun allow(warning: Warning, nowMs: Long): Boolean {
-        val pathBarrier = warning == Warning.PATH_BLOCKED ||
+        val pathBarrier = warning == Warning.PATH_BLOCKED || warning == Warning.POSSIBLE_OBSTRUCTION ||
             warning == Warning.PATH_LEFT || warning == Warning.PATH_RIGHT
         val newBlockAfterRecovery = lastWarning == Warning.PATH_CLEAR &&
             pathBarrier &&
             lastTime?.let { nowMs - it >= 2_000L } == true
         val perWarningCooldown = when (warning) {
             Warning.STOP -> 4_000L
-            Warning.POSSIBLE_WALL, Warning.PATH_BLOCKED, Warning.PATH_LEFT,
+            Warning.POSSIBLE_WALL, Warning.POSSIBLE_OBSTRUCTION, Warning.PATH_BLOCKED, Warning.PATH_LEFT,
             Warning.PATH_RIGHT, Warning.PATH_CLEAR -> 15_000L
             else -> cooldownMs
         }
@@ -121,7 +122,7 @@ class WarningGate(private val cooldownMs: Long = 6_000) {
             times[warning]?.let { nowMs - it < perWarningCooldown } == true) return false
         // A newly found route after a blocked view should be announced once promptly.
         val directionAfterBlock = (warning == Warning.PATH_LEFT || warning == Warning.PATH_RIGHT) &&
-            lastWarning == Warning.PATH_BLOCKED
+            (lastWarning == Warning.PATH_BLOCKED || lastWarning == Warning.POSSIBLE_OBSTRUCTION)
         if (!warning.urgent && warning != Warning.PATH_CLEAR &&
             !directionAfterBlock && !newBlockAfterRecovery &&
             lastTime?.let { nowMs - it < cooldownMs } == true) return false
